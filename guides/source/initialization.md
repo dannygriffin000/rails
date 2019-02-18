@@ -1,4 +1,4 @@
-**DO NOT READ THIS FILE ON GITHUB, GUIDES ARE PUBLISHED ON http://guides.rubyonrails.org.**
+**DO NOT READ THIS FILE ON GITHUB, GUIDES ARE PUBLISHED ON https://guides.rubyonrails.org.**
 
 The Rails Initialization Process
 ================================
@@ -45,7 +45,7 @@ load Gem.bin_path('railties', 'rails', version)
 ```
 
 If you try out this command in a Rails console, you would see that this loads
-`railties/exe/rails`. A part of the file `railties/exe/rails.rb` has the
+`railties/exe/rails`. A part of the file `railties/exe/rails` has the
 following code:
 
 ```ruby
@@ -93,7 +93,7 @@ require 'bundler/setup' # Set up gems listed in the Gemfile.
 
 In a standard Rails application, there's a `Gemfile` which declares all
 dependencies of the application. `config/boot.rb` sets
-`ENV['BUNDLE_GEMFILE']` to the location of this file. If the Gemfile
+`ENV['BUNDLE_GEMFILE']` to the location of this file. If the `Gemfile`
 exists, then `bundler/setup` is required. The require is used by Bundler to
 configure the load path for your Gemfile's dependencies.
 
@@ -116,8 +116,6 @@ A standard Rails application depends on several gems, specifically:
 * mail
 * mime-types
 * rack
-* rack-cache
-* rack-mount
 * rack-test
 * rails
 * railties
@@ -534,12 +532,12 @@ require "rails"
 
 %w(
   active_record/railtie
+  active_storage/engine
   action_controller/railtie
   action_view/railtie
   action_mailer/railtie
   active_job/railtie
   action_cable/engine
-  active_storage/engine
   rails/test_unit/railtie
   sprockets/railtie
 ).each do |railtie|

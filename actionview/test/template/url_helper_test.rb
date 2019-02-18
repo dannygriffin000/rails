@@ -77,8 +77,15 @@ class UrlHelperTest < ActiveSupport::TestCase
 
   def test_to_form_params_with_hash
     assert_equal(
-      [{ name: :name, value: "David" }, { name: :nationality, value: "Danish" }],
+      [{ name: "name", value: "David" }, { name: "nationality", value: "Danish" }],
       to_form_params(name: "David", nationality: "Danish")
+    )
+  end
+
+  def test_to_form_params_with_hash_having_symbol_and_string_keys
+    assert_equal(
+      [{ name: "name", value: "David" }, { name: "nationality", value: "Danish" }],
+      to_form_params("name" => "David", :nationality => "Danish")
     )
   end
 
@@ -508,16 +515,16 @@ class UrlHelperTest < ActiveSupport::TestCase
   def test_current_page_considering_params
     @request = request_for_url("/?order=desc&page=1")
 
-    assert !current_page?(url_hash, check_parameters: true)
-    assert !current_page?(url_hash.merge(check_parameters: true))
-    assert !current_page?(ActionController::Parameters.new(url_hash.merge(check_parameters: true)).permit!)
-    assert !current_page?("http://www.example.com/", check_parameters: true)
+    assert_not current_page?(url_hash, check_parameters: true)
+    assert_not current_page?(url_hash.merge(check_parameters: true))
+    assert_not current_page?(ActionController::Parameters.new(url_hash.merge(check_parameters: true)).permit!)
+    assert_not current_page?("http://www.example.com/", check_parameters: true)
   end
 
   def test_current_page_considering_params_when_options_does_not_respond_to_to_hash
     @request = request_for_url("/?order=desc&page=1")
 
-    assert !current_page?(:back, check_parameters: false)
+    assert_not current_page?(:back, check_parameters: false)
   end
 
   def test_current_page_with_params_that_match
@@ -562,7 +569,7 @@ class UrlHelperTest < ActiveSupport::TestCase
   def test_current_page_with_not_get_verb
     @request = request_for_url("/events", method: :post)
 
-    assert !current_page?("/events")
+    assert_not current_page?("/events")
   end
 
   def test_link_unless_current
@@ -663,7 +670,7 @@ class UrlHelperTest < ActiveSupport::TestCase
   end
 
   def test_mail_to_returns_html_safe_string
-    assert mail_to("david@loudthinking.com").html_safe?
+    assert_predicate mail_to("david@loudthinking.com"), :html_safe?
   end
 
   def test_mail_to_with_block

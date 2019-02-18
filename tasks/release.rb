@@ -6,7 +6,6 @@ FRAMEWORK_NAMES = Hash.new { |h, k| k.split(/(?<=active|action)/).map(&:capitali
 root    = File.expand_path("..", __dir__)
 version = File.read("#{root}/RAILS_VERSION").strip
 tag     = "v#{version}"
-gem_version = Gem::Version.new(version)
 
 directory "pkg"
 
@@ -90,7 +89,7 @@ npm_version = version.gsub(/\./).with_index { |s, i| i >= 2 ? "-" : s }
 
       if File.exist?("#{framework}/package.json")
         Dir.chdir("#{framework}") do
-          npm_tag = version =~ /[a-z]/ ? "pre" : "latest"
+          npm_tag = /[a-z]/.match?(version) ? "pre" : "latest"
           sh "npm publish --tag #{npm_tag}"
         end
       end
@@ -108,7 +107,7 @@ namespace :changelog do
       header = "## Rails #{version} (#{Date.today.strftime('%B %d, %Y')}) ##\n\n"
       header += "*   No changes.\n\n\n" if current_contents =~ /\A##/
       contents = header + current_contents
-      File.open(fname, "wb") { |f| f.write contents }
+      File.write(fname, contents)
     end
   end
 
@@ -119,7 +118,7 @@ namespace :changelog do
       fname = File.join fw, "CHANGELOG.md"
 
       contents = File.read(fname).sub(/^(## Rails .*)\n/, replace)
-      File.open(fname, "wb") { |f| f.write contents }
+      File.write(fname, contents)
     end
   end
 
@@ -248,6 +247,12 @@ task :announce do
 
     require "erb"
     template = File.read("../tasks/release_announcement_draft.erb")
-    puts ERB.new(template, nil, "<>").result(binding)
+
+    match = ERB.version.match(/\Aerb\.rb \[(?<version>[^ ]+) /)
+    if match && match[:version] >= "2.2.0" # Ruby 2.6+
+      puts ERB.new(template, trim_mode: "<>").result(binding)
+    else
+      puts ERB.new(template, nil, "<>").result(binding)
+    end
   end
 end

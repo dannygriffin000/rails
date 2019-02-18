@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-require_relative "core_ext/array/conversions"
-require_relative "core_ext/module/delegation"
-require_relative "core_ext/object/acts_like"
-require_relative "core_ext/string/filters"
-require_relative "deprecation"
+require "active_support/core_ext/array/conversions"
+require "active_support/core_ext/module/delegation"
+require "active_support/core_ext/object/acts_like"
+require "active_support/core_ext/string/filters"
+require "active_support/deprecation"
 
 module ActiveSupport
   # Provides accurate date and time measurements using Date#advance and
@@ -194,7 +194,6 @@ module ActiveSupport
         end
 
         parts[:seconds] = remainder
-        parts.reject! { |k, v| v.zero? }
 
         new(value, parts)
       end
@@ -211,6 +210,7 @@ module ActiveSupport
     def initialize(value, parts) #:nodoc:
       @value, @parts = value, parts.to_h
       @parts.default = 0
+      @parts.reject! { |k, v| v.zero? }
     end
 
     def coerce(other) #:nodoc:
@@ -370,6 +370,8 @@ module ActiveSupport
     alias :before :ago
 
     def inspect #:nodoc:
+      return "0 seconds" if parts.empty?
+
       parts.
         reduce(::Hash.new(0)) { |h, (l, r)| h[l] += r; h }.
         sort_by { |unit,  _ | PARTS.index(unit) }.
@@ -379,6 +381,14 @@ module ActiveSupport
 
     def as_json(options = nil) #:nodoc:
       to_i
+    end
+
+    def init_with(coder) #:nodoc:
+      initialize(coder["value"], coder["parts"])
+    end
+
+    def encode_with(coder) #:nodoc:
+      coder.map = { "value" => @value, "parts" => @parts }
     end
 
     # Build ISO 8601 Duration string for this duration.

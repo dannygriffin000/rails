@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "../visitors"
+require "action_dispatch/journey/visitors"
 
 module ActionDispatch
   module Journey # :nodoc:
@@ -32,7 +32,7 @@ module ActionDispatch
         end
 
         def name
-          left.tr "*:".freeze, "".freeze
+          -left.tr("*:", "")
         end
 
         def type
@@ -82,7 +82,7 @@ module ActionDispatch
         def initialize(left)
           super
           @regexp = DEFAULT_EXP
-          @name = left.tr "*:".freeze, "".freeze
+          @name = -left.tr("*:", "")
         end
 
         def default_regexp?

@@ -1,4 +1,4 @@
-**DO NOT READ THIS FILE ON GITHUB, GUIDES ARE PUBLISHED ON http://guides.rubyonrails.org.**
+**DO NOT READ THIS FILE ON GITHUB, GUIDES ARE PUBLISHED ON https://guides.rubyonrails.org.**
 
 The Basics of Creating Rails Plugins
 ====================================
@@ -135,10 +135,10 @@ To test that your method does what it says it does, run the unit tests with `bin
   2 runs, 2 assertions, 0 failures, 0 errors, 0 skips
 ```
 
-To see this in action, change to the `test/dummy` directory, fire up a console and start squawking:
+To see this in action, change to the `test/dummy` directory, fire up a console, and start squawking:
 
 ```bash
-$ bin/rails console
+$ rails console
 >> "Hello World".to_squawk
 => "squawk! Hello World"
 ```
@@ -237,12 +237,12 @@ Finished in 0.004812s, 831.2949 runs/s, 415.6475 assertions/s.
 
 This tells us that we don't have the necessary models (Hickwall and Wickwall) that we are trying to test.
 We can easily generate these models in our "dummy" Rails application by running the following commands from the
-test/dummy directory:
+`test/dummy` directory:
 
 ```bash
 $ cd test/dummy
-$ bin/rails generate model Hickwall last_squawk:string
-$ bin/rails generate model Wickwall last_squawk:string last_tweet:string
+$ rails generate model Hickwall last_squawk:string
+$ rails generate model Wickwall last_squawk:string last_tweet:string
 ```
 
 Now you can create the necessary database tables in your testing database by navigating to your dummy app
@@ -250,7 +250,7 @@ and migrating the database. First, run:
 
 ```bash
 $ cd test/dummy
-$ bin/rails db:migrate
+$ rails db:migrate
 ```
 
 While you are here, change the Hickwall and Wickwall models so that they know that they are supposed to act
@@ -359,7 +359,7 @@ When you run `bin/test`, you should see the tests all pass:
 
 ### Add an Instance Method
 
-This plugin will add a method named 'squawk' to any Active Record object that calls 'acts_as_yaffle'. The 'squawk'
+This plugin will add a method named 'squawk' to any Active Record object that calls `acts_as_yaffle`. The 'squawk'
 method will simply set the value of one of the fields in the database.
 
 To start out, write a failing test that shows the behavior you'd like:
@@ -392,7 +392,7 @@ end
 ```
 
 Run the test to make sure the last two tests fail with an error that contains "NoMethodError: undefined method `squawk'",
-then update 'acts_as_yaffle.rb' to look like this:
+then update `acts_as_yaffle.rb` to look like this:
 
 ```ruby
 # yaffle/lib/yaffle/acts_as_yaffle.rb
@@ -446,7 +446,7 @@ Publishing Your Gem
 -------------------
 
 Gem plugins currently in development can easily be shared from any Git repository. To share the Yaffle gem with others, simply
-commit the code to a Git repository (like GitHub) and add a line to the Gemfile of the application in question:
+commit the code to a Git repository (like GitHub) and add a line to the `Gemfile` of the application in question:
 
 ```ruby
 gem "yaffle", git: "https://github.com/rails/yaffle.git"
@@ -455,7 +455,7 @@ gem "yaffle", git: "https://github.com/rails/yaffle.git"
 After running `bundle install`, your gem functionality will be available to the application.
 
 When the gem is ready to be shared as a formal release, it can be published to [RubyGems](https://rubygems.org).
-For more information about publishing gems to RubyGems, see: [Publishing your gem](http://guides.rubygems.org/publishing).
+For more information about publishing gems to RubyGems, see: [Publishing your gem](https://guides.rubygems.org/publishing).
 
 RDoc Documentation
 ------------------
@@ -481,4 +481,4 @@ $ bundle exec rake rdoc
 
 * [Developing a RubyGem using Bundler](https://github.com/radar/guides/blob/master/gem-development.md)
 * [Using .gemspecs as Intended](http://yehudakatz.com/2010/04/02/using-gemspecs-as-intended/)
-* [Gemspec Reference](http://guides.rubygems.org/specification-reference/)
+* [Gemspec Reference](https://guides.rubygems.org/specification-reference/)

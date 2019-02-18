@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "active_support/core_ext/string/strip"
+
 module Rails
   module Generators
     module Actions
@@ -13,17 +15,22 @@ module Rails
       #
       #   gem "rspec", group: :test
       #   gem "technoweenie-restful-authentication", lib: "restful-authentication", source: "http://gems.github.com/"
-      #   gem "rails", "3.0", git: "git://github.com/rails/rails"
+      #   gem "rails", "3.0", git: "https://github.com/rails/rails"
+      #   gem "RedCloth", ">= 4.1.0", "< 4.2.0"
       def gem(*args)
         options = args.extract_options!
-        name, version = args
+        name, *versions = args
 
         # Set the message to be shown in logs. Uses the git repo if one is given,
         # otherwise use name (version).
         parts, message = [ quote(name) ], name.dup
-        if version ||= options.delete(:version)
-          parts   << quote(version)
-          message << " (#{version})"
+
+        if versions = versions.any? ? versions : options.delete(:version)
+          _versions = Array(versions)
+          _versions.each do |version|
+            parts << quote(version)
+          end
+          message << " (#{_versions.join(", ")})"
         end
         message = options[:git] if options[:git]
 
@@ -216,6 +223,7 @@ module Rails
       #   rake("db:migrate")
       #   rake("db:migrate", env: "production")
       #   rake("gems:install", sudo: true)
+      #   rake("gems:install", capture: true)
       def rake(command, options = {})
         execute_command :rake, command, options
       end
@@ -225,6 +233,7 @@ module Rails
       #   rails_command("db:migrate")
       #   rails_command("db:migrate", env: "production")
       #   rails_command("gems:install", sudo: true)
+      #   rails_command("gems:install", capture: true)
       def rails_command(command, options = {})
         execute_command :rails, command, options
       end
@@ -287,7 +296,11 @@ module Rails
           log executor, command
           env  = options[:env] || ENV["RAILS_ENV"] || "development"
           sudo = options[:sudo] && !Gem.win_platform? ? "sudo " : ""
-          in_root { run("#{sudo}#{extify(executor)} #{command} RAILS_ENV=#{env}", verbose: false) }
+          config = { verbose: false }
+
+          config[:capture] = options[:capture] if options[:capture]
+
+          in_root { run("#{sudo}#{extify(executor)} #{command} RAILS_ENV=#{env}", config) }
         end
 
         # Add an extension to the given name based on the platform.

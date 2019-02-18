@@ -1,69 +1,79 @@
-*   Deprecate `ActionDispatch::TestResponse` response aliases
+*   Raises `ActionController::RespondToMismatchError` with confliciting `respond_to` invocations.
 
-    `#success?`, `#missing?` & `#error?` are not supported by the actual
-    `ActionDispatch::Response` object and can produce false-positives. Instead,
-    use the response helpers provided by `Rack::Response`.
+    `respond_to` can match multiple types and lead to undefined behavior when
+    multiple invocations are made and the types do not match:
 
-    *Trevor Wistaff*
+        respond_to do |outer_type|
+          outer_type.js do
+            respond_to do |inner_type|
+              inner_type.html { render body: "HTML" }
+            end
+          end
+        end
 
-*   Protect from forgery by default
+    *Patrick Toomey*
 
-    Rather than protecting from forgery in the generated `ApplicationController`,
-    add it to `ActionController::Base` depending on
-    `config.action_controller.default_protect_from_forgery`. This configuration
-    defaults to false to support older versions which have removed it from their
-    `ApplicationController`, but is set to true for Rails 5.2.
+*   `ActionDispatch::Http::UploadedFile` now delegates `to_path` to its tempfile.
 
-    *Lisa Ugray*
+    This allows uploaded file objects to be passed directly to `File.read`
+    without raising a `TypeError`:
 
-*   Fallback `ActionController::Parameters#to_s` to `Hash#to_s`.
+        uploaded_file = ActionDispatch::Http::UploadedFile.new(tempfile: tmp_file)
+        File.read(uploaded_file)
 
-    *Kir Shatrov*
+    *Aaron Kromer*
 
-*   `driven_by` now registers poltergeist and capybara-webkit
+*   Pass along arguments to underlying `get` method in `follow_redirect!`
 
-    If poltergeist or capybara-webkit are set as drivers is set for System Tests,
-    `driven_by` will register the driver and set additional options passed via
-    the `:options` parameter.
+    Now all arguments passed to `follow_redirect!` are passed to the underlying
+    `get` method. This for example allows to set custom headers for the
+    redirection request to the server.
 
-    Refer to the respective driver's documentation to see what options can be passed.
+        follow_redirect!(params: { foo: :bar })
 
-    *Mario Chavez*
+    *Remo Fritzsche*
 
-*   AEAD encrypted cookies and sessions with GCM
+*   Introduce a new error page to when the implicit render page is accessed in the browser.
 
-    Encrypted cookies now use AES-GCM which couples authentication and
-    encryption in one faster step and produces shorter ciphertexts. Cookies
-    encrypted using AES in CBC HMAC mode will be seamlessly upgraded when
-    this new mode is enabled via the
-    `action_dispatch.use_authenticated_cookie_encryption` configuration value.
+    Now instead of showing an error page that with exception and backtraces we now show only
+    one informative page.
 
-    *Michael J Coyne*
+    *Vinicius Stock*
 
-*   Change the cache key format for fragments to make it easier to debug key churn. The new format is:
+*   Introduce ActionDispatch::DebugExceptions.register_interceptor
 
-        views/template/action.html.erb:7a1156131a6928cb0026877f8b749ac9/projects/123
-              ^template path           ^template tree digest            ^class   ^id
+    Exception aware plugin authors can use the newly introduced
+    `.register_interceptor` method to get the processed exception, instead of
+    monkey patching DebugExceptions.
 
-    *DHH*
+        ActionDispatch::DebugExceptions.register_interceptor do |request, exception|
+          HypoteticalPlugin.capture_exception(request, exception)
+        end
 
-*   Add support for recyclable cache keys with fragment caching. This uses the new versioned entries in the
-    `ActiveSupport::Cache` stores and relies on the fact that Active Record has split `#cache_key` and `#cache_version`
-    to support it.
+    *Genadi Samokovarov*
 
-    *DHH*
+*   Output only one Content-Security-Policy nonce header value per request.
 
-*   Add `action_controller_api` and `action_controller_base` load hooks to be called in `ActiveSupport.on_load`
+    Fixes #32597.
 
-    `ActionController::Base` and `ActionController::API` have differing implementations. This means that
-    the one umbrella hook `action_controller` is not able to address certain situations where a method
-    may not exist in a certain implementation.
+    *Andrey Novikov*, *Andrew White*
 
-    This is fixed by adding two new hooks so you can target `ActionController::Base` vs `ActionController::API`
+*   Move default headers configuration into their own module that can be included in controllers.
 
-    Fixes #27013.
+    *Kevin Deisz*
 
-    *Julian Nadeau*
+*   Add method `dig` to `session`.
+
+    *claudiob*, *Takumi Shotoku*
+
+*   Controller level `force_ssl` has been deprecated in favor of
+    `config.force_ssl`.
+
+    *Derek Prior*
+
+*   Rails 6 requires Ruby 2.4.1 or newer.
+
+    *Jeremy Daer*
 
 
-Please check [5-1-stable](https://github.com/rails/rails/blob/5-1-stable/actionpack/CHANGELOG.md) for previous changes.
+Please check [5-2-stable](https://github.com/rails/rails/blob/5-2-stable/actionpack/CHANGELOG.md) for previous changes.

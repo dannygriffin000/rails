@@ -337,8 +337,24 @@ class FormOptionsHelperTest < ActionView::TestCase
     )
   end
 
+  def test_option_groups_from_collection_for_select_with_callable_group_method
+    group_proc = Proc.new { |c| c.countries }
+    assert_dom_equal(
+      "<optgroup label=\"&lt;Africa&gt;\"><option value=\"&lt;sa&gt;\">&lt;South Africa&gt;</option>\n<option value=\"so\">Somalia</option></optgroup><optgroup label=\"Europe\"><option value=\"dk\" selected=\"selected\">Denmark</option>\n<option value=\"ie\">Ireland</option></optgroup>",
+      option_groups_from_collection_for_select(dummy_continents, group_proc, "continent_name", "country_id", "country_name", "dk")
+    )
+  end
+
+  def test_option_groups_from_collection_for_select_with_callable_group_label_method
+    label_proc = Proc.new { |c| c.continent_name }
+    assert_dom_equal(
+      "<optgroup label=\"&lt;Africa&gt;\"><option value=\"&lt;sa&gt;\">&lt;South Africa&gt;</option>\n<option value=\"so\">Somalia</option></optgroup><optgroup label=\"Europe\"><option value=\"dk\" selected=\"selected\">Denmark</option>\n<option value=\"ie\">Ireland</option></optgroup>",
+      option_groups_from_collection_for_select(dummy_continents, "countries", label_proc, "country_id", "country_name", "dk")
+    )
+  end
+
   def test_option_groups_from_collection_for_select_returns_html_safe_string
-    assert option_groups_from_collection_for_select(dummy_continents, "countries", "continent_name", "country_id", "country_name", "dk").html_safe?
+    assert_predicate option_groups_from_collection_for_select(dummy_continents, "countries", "continent_name", "country_id", "country_name", "dk"), :html_safe?
   end
 
   def test_grouped_options_for_select_with_array
@@ -367,7 +383,7 @@ class FormOptionsHelperTest < ActionView::TestCase
     assert_dom_equal(
       "<optgroup label=\"----------\"><option value=\"US\">US</option>\n<option value=\"Canada\">Canada</option></optgroup><optgroup label=\"----------\"><option value=\"GB\">GB</option>\n<option value=\"Germany\">Germany</option></optgroup>",
 
-      grouped_options_for_select([["US", "Canada"] , ["GB", "Germany"]], nil, divider: "----------")
+      grouped_options_for_select([["US", "Canada"], ["GB", "Germany"]], nil, divider: "----------")
     )
   end
 
@@ -386,7 +402,7 @@ class FormOptionsHelperTest < ActionView::TestCase
   end
 
   def test_grouped_options_for_select_returns_html_safe_string
-    assert grouped_options_for_select([["Hats", ["Baseball Cap", "Cowboy Hat"]]]).html_safe?
+    assert_predicate grouped_options_for_select([["Hats", ["Baseball Cap", "Cowboy Hat"]]]), :html_safe?
   end
 
   def test_grouped_options_for_select_with_prompt_returns_html_escaped_string
@@ -476,7 +492,7 @@ class FormOptionsHelperTest < ActionView::TestCase
   end
 
   def test_time_zone_options_returns_html_safe_string
-    assert time_zone_options_for_select.html_safe?
+    assert_predicate time_zone_options_for_select, :html_safe?
   end
 
   def test_select
@@ -492,6 +508,16 @@ class FormOptionsHelperTest < ActionView::TestCase
     assert_dom_equal(
       "<select id=\"post_category\" name=\"post[category]\"></select>",
       select(:post, :category, "", {}, { multiple: false })
+    )
+  end
+
+  def test_required_select_with_default_and_selected_placeholder
+    assert_dom_equal(
+      ['<select required="required" name="post[category]" id="post_category"><option disabled="disabled" selected="selected" value="">Choose one</option>',
+      '<option value="lifestyle">lifestyle</option>',
+      '<option value="programming">programming</option>',
+      '<option value="spiritual">spiritual</option></select>'].join("\n"),
+      select(:post, :category, ["lifestyle", "programming", "spiritual"], { selected: "", disabled: "", prompt: "Choose one" }, { required: true })
     )
   end
 
@@ -1248,6 +1274,25 @@ class FormOptionsHelperTest < ActionView::TestCase
                  "<option value=\"D\" selected=\"selected\">D</option>\n" \
                  "<option value=\"E\">E</option>" \
                  "</select>",
+                 html
+  end
+
+  def test_time_zone_select_with_priority_zones_and_errors
+    @firm = Firm.new("D")
+    @firm.extend ActiveModel::Validations
+    @firm.errors[:time_zone] << "invalid"
+    zones = [ ActiveSupport::TimeZone.new("A"), ActiveSupport::TimeZone.new("D") ]
+    html = time_zone_select("firm", "time_zone", zones)
+    assert_dom_equal "<div class=\"field_with_errors\">" \
+                 "<select id=\"firm_time_zone\" name=\"firm[time_zone]\">" \
+                 "<option value=\"A\">A</option>\n" \
+                 "<option value=\"D\" selected=\"selected\">D</option>" \
+                 "<option value=\"\" disabled=\"disabled\">-------------</option>\n" \
+                 "<option value=\"B\">B</option>\n" \
+                 "<option value=\"C\">C</option>\n" \
+                 "<option value=\"E\">E</option>" \
+                 "</select>" \
+                 "</div>",
                  html
   end
 

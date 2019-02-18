@@ -31,7 +31,7 @@ module ActiveRecord
     end
 
     def test_or_with_bind_params
-      assert_equal Post.find([1, 2]), Post.where(id: 1).or(Post.where(id: 2)).to_a
+      assert_equal Post.find([1, 2]).sort_by(&:id), Post.where(id: 1).or(Post.where(id: 2)).sort_by(&:id)
     end
 
     def test_or_with_null_both
@@ -125,6 +125,13 @@ module ActiveRecord
         .or(joined.where(title: "I don't have any comments"))
       expected = Author.find(1).posts + Post.where(title: "I don't have any comments")
       assert_equal expected.sort_by(&:id), actual.sort_by(&:id)
+    end
+
+    def test_or_with_scope_on_association
+      author = Author.first
+      assert_nothing_raised do
+        author.top_posts.or(author.other_top_posts)
+      end
     end
   end
 end

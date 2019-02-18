@@ -12,7 +12,6 @@ module ActiveRecord
       @connection = ActiveRecord::Base.connection
     end
 
-    #Cache v 1.1 tests
     def test_statement_cache
       Book.create(name: "my book")
       Book.create(name: "my other book")
@@ -50,8 +49,6 @@ module ActiveRecord
       assert_equal("my book", a.name)
       assert_equal("my other book", b.name)
     end
-
-    #End
 
     def test_statement_cache_with_simple_statement
       cache = ActiveRecord::StatementCache.create(Book.connection) do |params|
@@ -105,7 +102,7 @@ module ActiveRecord
         Book.find_by(name: "my other book")
       end
 
-      refute_equal book, other_book
+      assert_not_equal book, other_book
     end
 
     def test_find_by_does_not_use_statement_cache_if_table_name_is_changed

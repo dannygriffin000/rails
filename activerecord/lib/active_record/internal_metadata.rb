@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require_relative "scoping/default"
-require_relative "scoping/named"
+require "active_record/scoping/default"
+require "active_record/scoping/named"
 
 module ActiveRecord
   # This class is used to create a table that keeps track of values and keys such
@@ -17,7 +17,7 @@ module ActiveRecord
       end
 
       def []=(key, value)
-        find_or_initialize_by(key: key).update_attributes!(value: value)
+        find_or_initialize_by(key: key).update!(value: value)
       end
 
       def [](key)

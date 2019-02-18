@@ -20,30 +20,30 @@ class Rails::ConsoleTest < ActiveSupport::TestCase
 
   def test_sandbox_option
     console = Rails::Console.new(app, parse_arguments(["--sandbox"]))
-    assert console.sandbox?
+    assert_predicate console, :sandbox?
   end
 
   def test_short_version_of_sandbox_option
     console = Rails::Console.new(app, parse_arguments(["-s"]))
-    assert console.sandbox?
+    assert_predicate console, :sandbox?
   end
 
   def test_no_options
     console = Rails::Console.new(app, parse_arguments([]))
-    assert !console.sandbox?
+    assert_not_predicate console, :sandbox?
   end
 
   def test_start
     start
 
-    assert app.console.started?
+    assert_predicate app.console, :started?
     assert_match(/Loading \w+ environment \(Rails/, output)
   end
 
   def test_start_with_sandbox
     start ["--sandbox"]
 
-    assert app.console.started?
+    assert_predicate app.console, :started?
     assert app.sandbox
     assert_match(/Loading \w+ environment in sandbox \(Rails/, output)
   end
@@ -151,7 +151,8 @@ class Rails::ConsoleTest < ActiveSupport::TestCase
 
     def build_app(console)
       mocked_console = Class.new do
-        attr_reader :sandbox, :console
+        attr_accessor :sandbox
+        attr_reader :console
 
         def initialize(console)
           @console = console
@@ -161,10 +162,6 @@ class Rails::ConsoleTest < ActiveSupport::TestCase
           self
         end
 
-        def sandbox=(arg)
-          @sandbox = arg
-        end
-
         def load_console
         end
       end
@@ -172,21 +169,8 @@ class Rails::ConsoleTest < ActiveSupport::TestCase
     end
 
     def parse_arguments(args)
-      Rails::Command::ConsoleCommand.class_eval do
-        alias_method :old_perform, :perform
-        define_method(:perform) do
-          extract_environment_option_from_argument
-
-          options
-        end
-      end
-
-      Rails::Command.invoke(:console, args)
-    ensure
-      Rails::Command::ConsoleCommand.class_eval do
-        undef_method :perform
-        alias_method :perform, :old_perform
-        undef_method :old_perform
-      end
+      command = Rails::Command::ConsoleCommand.new([], args)
+      command.send(:extract_environment_option_from_argument)
+      command.options
     end
 end

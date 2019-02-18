@@ -2,7 +2,7 @@
 
 require "action_view"
 require "action_controller"
-require_relative "log_subscriber"
+require "action_controller/log_subscriber"
 
 module ActionController
   # API Controller is a lightweight version of <tt>ActionController::Base</tt>,
@@ -122,6 +122,7 @@ module ActionController
 
       ForceSSL,
       DataStreaming,
+      DefaultHeaders,
 
       # Before callbacks should also be executed as early as possible, so
       # also include them at the bottom.

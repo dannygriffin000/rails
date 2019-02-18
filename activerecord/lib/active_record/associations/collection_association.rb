@@ -45,6 +45,8 @@ module ActiveRecord
       def ids_reader
         if loaded?
           target.pluck(reflection.association_primary_key)
+        elsif !target.empty?
+          load_target.pluck(reflection.association_primary_key)
         else
           @association_ids ||= scope.pluck(reflection.association_primary_key)
         end
@@ -52,11 +54,11 @@ module ActiveRecord
 
       # Implements the ids writer method, e.g. foo.item_ids= for Foo.has_many :items
       def ids_writer(ids)
-        pk_type = reflection.association_primary_key_type
+        primary_key = reflection.association_primary_key
+        pk_type = klass.type_for_attribute(primary_key)
         ids = Array(ids).reject(&:blank?)
         ids.map! { |i| pk_type.cast(i) }
 
-        primary_key = reflection.association_primary_key
         records = klass.where(primary_key => ids).index_by do |r|
           r.public_send(primary_key)
         end.values_at(*ids).compact
@@ -79,7 +81,13 @@ module ActiveRecord
       def find(*args)
         if options[:inverse_of] && loaded?
           args_flatten = args.flatten
-          raise RecordNotFound, "Couldn't find #{scope.klass.name} without an ID" if args_flatten.blank?
+          model = scope.klass
+
+          if args_flatten.blank?
+            error_message = "Couldn't find #{model.name} without an ID"
+            raise RecordNotFound.new(error_message, model.name, model.primary_key, args)
+          end
+
           result = find_by_scan(*args)
 
           result_size = Array(result).size
@@ -97,9 +105,7 @@ module ActiveRecord
         if attributes.is_a?(Array)
           attributes.collect { |attr| build(attr, &block) }
         else
-          add_to_target(build_record(attributes)) do |record|
-            yield(record) if block_given?
-          end
+          add_to_target(build_record(attributes, &block))
         end
       end
 
@@ -181,8 +187,6 @@ module ActiveRecord
       # are actually removed from the database, that depends precisely on
       # +delete_records+. They are in any case removed from the collection.
       def delete(*records)
-        return if records.empty?
-        records = find(records) if records.any? { |record| record.kind_of?(Integer) || record.kind_of?(String) }
         delete_or_destroy(records, options[:dependent])
       end
 
@@ -192,8 +196,6 @@ module ActiveRecord
       # Note that this method removes records from the database ignoring the
       # +:dependent+ option.
       def destroy(*records)
-        return if records.empty?
-        records = find(records) if records.any? { |record| record.kind_of?(Integer) || record.kind_of?(String) }
         delete_or_destroy(records, :destroy)
       end
 
@@ -210,9 +212,11 @@ module ActiveRecord
       def size
         if !find_target? || loaded?
           target.size
+        elsif @association_ids
+          @association_ids.size
         elsif !association_scope.group_values.empty?
           load_target.size
-        elsif !association_scope.distinct_value && target.is_a?(Array)
+        elsif !association_scope.distinct_value && !target.empty?
           unsaved_records = target.select(&:new_record?)
           unsaved_records.size + count_records
         else
@@ -229,10 +233,10 @@ module ActiveRecord
       # loaded and you are going to fetch the records anyway it is better to
       # check <tt>collection.length.zero?</tt>.
       def empty?
-        if loaded?
+        if loaded? || @association_ids
           size.zero?
         else
-          @target.blank? && !scope.exists?
+          target.empty? && !scope.exists?
         end
       end
 
@@ -354,15 +358,18 @@ module ActiveRecord
           if attributes.is_a?(Array)
             attributes.collect { |attr| _create_record(attr, raise, &block) }
           else
+            record = build_record(attributes, &block)
             transaction do
-              add_to_target(build_record(attributes)) do |record|
-                yield(record) if block_given?
-                insert_record(record, true, raise) {
+              result = nil
+              add_to_target(record) do
+                result = insert_record(record, true, raise) {
                   @_was_loaded = loaded?
                   @association_ids = nil
                 }
               end
+              raise ActiveRecord::Rollback unless result
             end
+            record
           end
         end
 
@@ -376,6 +383,8 @@ module ActiveRecord
         end
 
         def delete_or_destroy(records, method)
+          return if records.empty?
+          records = find(records) if records.any? { |record| record.kind_of?(Integer) || record.kind_of?(String) }
           records = records.flatten
           records.each { |record| raise_on_type_mismatch!(record) }
           existing_records = records.reject(&:new_record?)
@@ -391,7 +400,7 @@ module ActiveRecord
           records.each { |record| callback(:before_remove, record) }
 
           delete_records(existing_records, method) if existing_records.any?
-          records.each { |record| target.delete(record) }
+          @target -= records
 
           records.each { |record| callback(:after_remove, record) }
         end
@@ -438,7 +447,9 @@ module ActiveRecord
             end
           end
 
-          result && records
+          raise ActiveRecord::Rollback unless result
+
+          records
         end
 
         def replace_on_target(record, index, skip_callbacks)

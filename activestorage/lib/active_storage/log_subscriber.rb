@@ -14,8 +14,14 @@ module ActiveStorage
       info event, color("Downloaded file from key: #{key_in(event)}", BLUE)
     end
 
+    alias_method :service_streaming_download, :service_download
+
     def service_delete(event)
       info event, color("Deleted file from key: #{key_in(event)}", RED)
+    end
+
+    def service_delete_prefixed(event)
+      info event, color("Deleted files by key prefix: #{event.payload[:prefix]}", RED)
     end
 
     def service_exist(event)
@@ -27,7 +33,7 @@ module ActiveStorage
     end
 
     def logger
-      ActiveStorage::Service.logger
+      ActiveStorage.logger
     end
 
     private

@@ -5,7 +5,12 @@ require "database/setup"
 
 class ActiveStorage::BlobsControllerTest < ActionDispatch::IntegrationTest
   setup do
-    @blob = create_image_blob filename: "racecar.jpg"
+    @blob = create_file_blob filename: "racecar.jpg"
+  end
+
+  test "showing blob with invalid signed ID" do
+    get rails_service_blob_url("invalid", "racecar.jpg")
+    assert_response :not_found
   end
 
   test "showing blob utilizes browser caching" do

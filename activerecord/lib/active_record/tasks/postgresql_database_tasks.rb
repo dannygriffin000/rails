@@ -90,9 +90,7 @@ module ActiveRecord
 
       private
 
-        def configuration
-          @configuration
-        end
+        attr_reader :configuration
 
         def encoding
           configuration["encoding"] || DEFAULT_ENCODING
@@ -117,7 +115,7 @@ module ActiveRecord
         end
 
         def run_cmd_error(cmd, args, action)
-          msg = "failed to execute:\n"
+          msg = "failed to execute:\n".dup
           msg << "#{cmd} #{args.join(' ')}\n\n"
           msg << "Please check the output above for any errors and make sure that `#{cmd}` is installed in your PATH and has proper permissions.\n\n"
           msg

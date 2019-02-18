@@ -1,4 +1,4 @@
-**DO NOT READ THIS FILE ON GITHUB, GUIDES ARE PUBLISHED ON http://guides.rubyonrails.org.**
+**DO NOT READ THIS FILE ON GITHUB, GUIDES ARE PUBLISHED ON https://guides.rubyonrails.org.**
 
 Active Record Query Interface
 =============================
@@ -368,7 +368,7 @@ end
 
 **`:start`**
 
-By default, records are fetched in ascending order of the primary key, which must be an integer. The `:start` option allows you to configure the first ID of the sequence whenever the lowest ID is not the one you need. This would be useful, for example, if you wanted to resume an interrupted batch process, provided you saved the last processed ID as a checkpoint.
+By default, records are fetched in ascending order of the primary key. The `:start` option allows you to configure the first ID of the sequence whenever the lowest ID is not the one you need. This would be useful, for example, if you wanted to resume an interrupted batch process, provided you saved the last processed ID as a checkpoint.
 
 For example, to send newsletters only to users with the primary key starting from 2000:
 
@@ -414,7 +414,7 @@ end
 `find_in_batches` works on model classes, as seen above, and also on relations:
 
 ```ruby
-Invoice.pending.find_in_batches do |invoice|
+Invoice.pending.find_in_batches do |invoices|
   pending_invoices_export.add_invoices(invoices)
 end
 ```
@@ -486,7 +486,7 @@ This makes for clearer readability if you have a large number of variable condit
 
 Active Record also allows you to pass in hash conditions which can increase the readability of your conditions syntax. With hash conditions, you pass in a hash with keys of the fields you want qualified and the values of how you want to qualify them:
 
-NOTE: Only equality, range and subset checking are possible with Hash conditions.
+NOTE: Only equality, range, and subset checking are possible with Hash conditions.
 
 #### Equality Conditions
 
@@ -801,7 +801,7 @@ The SQL that would be executed:
 SELECT * FROM articles WHERE id > 10 ORDER BY id DESC
 
 # Original query without `only`
-SELECT "articles".* FROM "articles" WHERE (id > 10) ORDER BY id desc LIMIT 20
+SELECT * FROM articles WHERE id > 10 ORDER BY id DESC LIMIT 20
 
 ```
 
@@ -820,14 +820,14 @@ Article.find(10).comments.reorder('name')
 The SQL that would be executed:
 
 ```sql
-SELECT * FROM articles WHERE id = 10
+SELECT * FROM articles WHERE id = 10 LIMIT 1
 SELECT * FROM comments WHERE article_id = 10 ORDER BY name
 ```
 
 In the case where the `reorder` clause is not used, the SQL executed would be:
 
 ```sql
-SELECT * FROM articles WHERE id = 10
+SELECT * FROM articles WHERE id = 10 LIMIT 1
 SELECT * FROM comments WHERE article_id = 10 ORDER BY posted_at DESC
 ```
 
@@ -1091,7 +1091,7 @@ This produces:
 
 ```sql
 SELECT articles.* FROM articles
-  INNER JOIN categories ON articles.category_id = categories.id
+  INNER JOIN categories ON categories.id = articles.category_id
   INNER JOIN comments ON comments.article_id = articles.id
 ```
 
@@ -1393,7 +1393,7 @@ end
 ```
 
 NOTE: The `default_scope` is also applied while creating/building a record
-when the scope arguments are given as a `Hash`. It is not applied while 
+when the scope arguments are given as a `Hash`. It is not applied while
 updating a record. E.g.:
 
 ```ruby
@@ -1712,10 +1712,10 @@ Client.find_by_sql("SELECT * FROM clients
 
 ### `select_all`
 
-`find_by_sql` has a close relative called `connection#select_all`. `select_all` will retrieve objects from the database using custom SQL just like `find_by_sql` but will not instantiate them. Instead, you will get an array of hashes where each hash indicates a record.
+`find_by_sql` has a close relative called `connection#select_all`. `select_all` will retrieve objects from the database using custom SQL just like `find_by_sql` but will not instantiate them. This method will return an instance of `ActiveRecord::Result` class and calling `to_hash` on this object would return you an array of hashes where each hash indicates a record.
 
 ```ruby
-Client.connection.select_all("SELECT first_name, created_at FROM clients WHERE id = '1'")
+Client.connection.select_all("SELECT first_name, created_at FROM clients WHERE id = '1'").to_hash
 # => [
 #   {"first_name"=>"Rafael", "created_at"=>"2012-11-10 23:23:45.281189"},
 #   {"first_name"=>"Eileen", "created_at"=>"2013-12-09 11:22:35.221282"}
@@ -1775,6 +1775,12 @@ Client.select(:name).map &:name
 
 Client.pluck(:name)
 # => ["David", "Jeremy", "Jose"]
+```
+
+You are not limited to querying fields from a single table, you can query multiple tables as well.
+
+```
+Client.joins(:comments, :categories).pluck("clients.email, comments.title, categories.name")
 ```
 
 Furthermore, unlike `select` and other `Relation` scopes, `pluck` triggers an immediate
@@ -1871,14 +1877,14 @@ All calculation methods work directly on a model:
 
 ```ruby
 Client.count
-# SELECT count(*) AS count_all FROM clients
+# SELECT COUNT(*) FROM clients
 ```
 
 Or on a relation:
 
 ```ruby
 Client.where(first_name: 'Ryan').count
-# SELECT count(*) AS count_all FROM clients WHERE (first_name = 'Ryan')
+# SELECT COUNT(*) FROM clients WHERE (first_name = 'Ryan')
 ```
 
 You can also use various finder methods on a relation for performing complex calculations:
@@ -1890,9 +1896,9 @@ Client.includes("orders").where(first_name: 'Ryan', orders: { status: 'received'
 Which will execute:
 
 ```sql
-SELECT count(DISTINCT clients.id) AS count_all FROM clients
-  LEFT OUTER JOIN orders ON orders.client_id = clients.id WHERE
-  (clients.first_name = 'Ryan' AND orders.status = 'received')
+SELECT COUNT(DISTINCT clients.id) FROM clients
+  LEFT OUTER JOIN orders ON orders.client_id = clients.id
+  WHERE (clients.first_name = 'Ryan' AND orders.status = 'received')
 ```
 
 ### Count

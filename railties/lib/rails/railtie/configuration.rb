@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "../configuration"
+require "rails/configuration"
 
 module Rails
   class Railtie
@@ -55,7 +55,7 @@ module Rails
         ActiveSupport.on_load(:before_configuration, yield: true, &block)
       end
 
-      # Third configurable block to run. Does not run if +config.cache_classes+
+      # Third configurable block to run. Does not run if +config.eager_load+
       # set to false.
       def before_eager_load(&block)
         ActiveSupport.on_load(:before_eager_load, yield: true, &block)

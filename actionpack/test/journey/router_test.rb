@@ -30,7 +30,7 @@ module ActionDispatch
       def test_unicode
         get "/ほげ", to: "foo#bar"
 
-        #match the escaped version of /ほげ
+        # match the escaped version of /ほげ
         env = rails_env "PATH_INFO" => "/%E3%81%BB%E3%81%92"
         called = false
         router.recognize(env) do |r, params|
@@ -491,6 +491,15 @@ module ActionDispatch
         end
 
         assert_not called
+      end
+
+      def test_eager_load_with_routes
+        get "/foo-bar", to: "foo#bar"
+        assert_nil router.eager_load!
+      end
+
+      def test_eager_load_without_routes
+        assert_nil router.eager_load!
       end
 
       private

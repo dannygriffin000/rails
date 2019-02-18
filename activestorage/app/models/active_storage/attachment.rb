@@ -9,22 +9,41 @@ require "active_support/core_ext/module/delegation"
 class ActiveStorage::Attachment < ActiveRecord::Base
   self.table_name = "active_storage_attachments"
 
-  belongs_to :record, polymorphic: true
+  belongs_to :record, polymorphic: true, touch: true
   belongs_to :blob, class_name: "ActiveStorage::Blob"
 
   delegate_missing_to :blob
 
-  # Purging an attachment will purge the blob (delete the file on the service, then destroy the record)
-  # and then destroy the attachment itself.
+  after_create_commit :analyze_blob_later, :identify_blob
+  after_destroy_commit :purge_dependent_blob_later
+
+  # Synchronously deletes the attachment and {purges the blob}[rdoc-ref:ActiveStorage::Blob#purge].
   def purge
-    blob.purge
-    destroy
+    delete
+    blob&.purge
   end
 
-  # Purging an attachment means purging the blob, which means talking to the service, which means
-  # talking over the Internet. Whenever you're doing that, it's a good idea to put that work in a job,
-  # so it doesn't hold up other operations. That's what +purge_later+ provides.
+  # Deletes the attachment and {enqueues a background job}[rdoc-ref:ActiveStorage::Blob#purge_later] to purge the blob.
   def purge_later
-    ActiveStorage::PurgeJob.perform_later(self)
+    delete
+    blob&.purge_later
   end
+
+  private
+    def identify_blob
+      blob.identify
+    end
+
+    def analyze_blob_later
+      blob.analyze_later unless blob.analyzed?
+    end
+
+    def purge_dependent_blob_later
+      blob&.purge_later if dependent == :purge_later
+    end
+
+
+    def dependent
+      record.attachment_reflections[name]&.options[:dependent]
+    end
 end

@@ -21,7 +21,7 @@ class Post < ActiveRecord::Base
 
   scope :containing_the_letter_a, -> { where("body LIKE '%a%'") }
   scope :titled_with_an_apostrophe, -> { where("title LIKE '%''%'") }
-  scope :ranked_by_comments,      -> { order("comments_count DESC") }
+  scope :ranked_by_comments, -> { order(arel_attribute(:comments_count).desc) }
 
   scope :limit_by, lambda { |l| limit(l) }
   scope :locked, -> { lock }
@@ -106,6 +106,9 @@ class Post < ActiveRecord::Base
     end
   end
 
+  has_many :indestructible_taggings, as: :taggable, counter_cache: :indestructible_tags_count
+  has_many :indestructible_tags, through: :indestructible_taggings, source: :tag
+
   has_many :taggings_with_delete_all, class_name: "Tagging", as: :taggable, dependent: :delete_all, counter_cache: :taggings_with_delete_all_count
   has_many :taggings_with_destroy, class_name: "Tagging", as: :taggable, dependent: :destroy, counter_cache: :taggings_with_destroy_count
 
@@ -115,6 +118,7 @@ class Post < ActiveRecord::Base
   has_many :misc_tags, -> { where tags: { name: "Misc" } }, through: :taggings, source: :tag
   has_many :funky_tags, through: :taggings, source: :tag
   has_many :super_tags, through: :taggings
+  has_many :ordered_tags, through: :taggings
   has_many :tags_with_primary_key, through: :taggings, source: :tag_with_primary_key
   has_one :tagging, as: :taggable
 
@@ -249,6 +253,7 @@ class SpecialPostWithDefaultScope < ActiveRecord::Base
   self.inheritance_column = :disabled
   self.table_name = "posts"
   default_scope { where(id: [1, 5, 6]) }
+  scope :unscoped_all, -> { unscoped { all } }
 end
 
 class PostThatLoadsCommentsInAnAfterSaveHook < ActiveRecord::Base
@@ -317,6 +322,18 @@ class FakeKlass
 
     def arel_attribute(name, table)
       table[name]
+    end
+
+    def enforce_raw_sql_whitelist(*args)
+      # noop
+    end
+
+    def arel_table
+      Post.arel_table
+    end
+
+    def predicate_builder
+      Post.predicate_builder
     end
   end
 end

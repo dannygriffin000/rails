@@ -60,6 +60,10 @@ end
 
 class SpecialComment < Comment
   default_scope { where(deleted_at: nil) }
+
+  def self.what_are_you
+    "a special comment..."
+  end
 end
 
 class SubSpecialComment < SpecialComment
@@ -72,7 +76,7 @@ class CommentThatAutomaticallyAltersPostBody < Comment
   belongs_to :post, class_name: "PostThatLoadsCommentsInAnAfterSaveHook", foreign_key: :post_id
 
   after_save do |comment|
-    comment.post.update_attributes(body: "Automatically altered")
+    comment.post.update(body: "Automatically altered")
   end
 end
 
@@ -83,6 +87,6 @@ end
 
 class CommentWithAfterCreateUpdate < Comment
   after_create do
-    update_attributes(body: "bar")
+    update(body: "bar")
   end
 end

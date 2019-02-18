@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
 require "cgi"
-require_relative "date_helper"
-require_relative "tag_helper"
-require_relative "form_tag_helper"
-require_relative "active_model_helper"
-require_relative "../model_naming"
-require_relative "../record_identifier"
+require "action_view/helpers/date_helper"
+require "action_view/helpers/tag_helper"
+require "action_view/helpers/form_tag_helper"
+require "action_view/helpers/active_model_helper"
+require "action_view/model_naming"
+require "action_view/record_identifier"
 require "active_support/core_ext/module/attribute_accessors"
 require "active_support/core_ext/hash/slice"
 require "active_support/core_ext/string/output_safety"
@@ -14,12 +14,12 @@ require "active_support/core_ext/string/inflections"
 
 module ActionView
   # = Action View Form Helpers
-  module Helpers
+  module Helpers #:nodoc:
     # Form helpers are designed to make working with resources much easier
     # compared to using vanilla HTML.
     #
     # Typically, a form designed to create or update a resource reflects the
-    # identity of the resource in several ways: (i) the url that the form is
+    # identity of the resource in several ways: (i) the URL that the form is
     # sent to (the form element's +action+ attribute) should result in a request
     # being routed to the appropriate controller action (with the appropriate <tt>:id</tt>
     # parameter in the case of an existing resource), (ii) input fields should
@@ -166,7 +166,7 @@ module ActionView
       #   So for example you may use a named route directly. When the model is
       #   represented by a string or symbol, as in the example above, if the
       #   <tt>:url</tt> option is not specified, by default the form will be
-      #   sent back to the current url (We will describe below an alternative
+      #   sent back to the current URL (We will describe below an alternative
       #   resource-oriented usage of +form_for+ in which the URL does not need
       #   to be specified explicitly).
       # * <tt>:namespace</tt> - A namespace for your form to ensure uniqueness of
@@ -478,6 +478,8 @@ module ActionView
 
       mattr_accessor :form_with_generates_remote_forms, default: true
 
+      mattr_accessor :form_with_generates_ids, default: false
+
       # Creates a form tag based on mixing URLs, scopes, or models.
       #
       #   # Using just a URL:
@@ -606,10 +608,10 @@ module ActionView
       #   This is helpful when fragment-caching the form. Remote forms
       #   get the authenticity token from the <tt>meta</tt> tag, so embedding is
       #   unnecessary unless you support browsers without JavaScript.
-      # * <tt>:local</tt> - By default form submits are remote and unobstrusive XHRs.
+      # * <tt>:local</tt> - By default form submits are remote and unobtrusive XHRs.
       #   Disable remote submits with <tt>local: true</tt>.
-      # * <tt>:skip_enforcing_utf8</tt> - By default a hidden field named +utf8+
-      #   is output to enforce UTF-8 submits. Set to true to skip the field.
+      # * <tt>:skip_enforcing_utf8</tt> - If set to true, a hidden input with name
+      #   utf8 is not output.
       # * <tt>:builder</tt> - Override the object used to build the form.
       # * <tt>:id</tt> - Optional HTML id attribute.
       # * <tt>:class</tt> - Optional HTML class attribute.
@@ -639,16 +641,6 @@ module ActionView
       #   <% end %>
       #
       # Where <tt>@document = Document.find(params[:id])</tt>.
-      #
-      # When using labels +form_with+ requires setting the id on the field being
-      # labelled:
-      #
-      #   <%= form_with(model: @post) do |form| %>
-      #     <%= form.label :title %>
-      #     <%= form.text_field :title, id: :post_title %>
-      #   <% end %>
-      #
-      # See +label+ for more on how the +for+ attribute is derived.
       #
       # === Mixing with other form helpers
       #
@@ -746,7 +738,7 @@ module ActionView
       #   end
       def form_with(model: nil, scope: nil, url: nil, format: nil, **options)
         options[:allow_method_names_outside_object] = true
-        options[:skip_default_ids] = true
+        options[:skip_default_ids] = !form_with_generates_ids
 
         if model
           url ||= polymorphic_path(model, format: format)
@@ -1022,14 +1014,13 @@ module ActionView
       #   <%= fields :comment do |fields| %>
       #     <%= fields.text_field :body %>
       #   <% end %>
-      #   # => <input type="text" name="comment[body]>
+      #   # => <input type="text" name="comment[body]">
       #
       #   # Using a model infers the scope and assigns field values:
-      #   <%= fields model: Comment.new(body: "full bodied") do |fields| %<
+      #   <%= fields model: Comment.new(body: "full bodied") do |fields| %>
       #     <%= fields.text_field :body %>
       #   <% end %>
-      #   # =>
-      #   <input type="text" name="comment[body] value="full bodied">
+      #   # => <input type="text" name="comment[body]" value="full bodied">
       #
       #   # Using +fields+ with +form_with+:
       #   <%= form_with model: @post do |form| %>
@@ -1043,16 +1034,6 @@ module ActionView
       # Much like +form_with+ a FormBuilder instance associated with the scope
       # or model is yielded, so any generated field names are prefixed with
       # either the passed scope or the scope inferred from the <tt>:model</tt>.
-      #
-      # When using labels +fields+ requires setting the id on the field being
-      # labelled:
-      #
-      #   <%= fields :comment do |fields| %>
-      #     <%= fields.label :body %>
-      #     <%= fields.text_field :body, id: :comment_body %>
-      #   <% end %>
-      #
-      # See +label+ for more on how the +for+ attribute is derived.
       #
       # === Mixing with other form helpers
       #
@@ -1072,7 +1053,7 @@ module ActionView
       # FormOptionsHelper#collection_select and DateHelper#datetime_select.
       def fields(scope = nil, model: nil, **options, &block)
         options[:allow_method_names_outside_object] = true
-        options[:skip_default_ids] = true
+        options[:skip_default_ids] = !form_with_generates_ids
 
         if model
           scope ||= model_name_from_record_or_class(model).param_key
@@ -1538,10 +1519,10 @@ module ActionView
 
       private
         def html_options_for_form_with(url_for_options = nil, model = nil, html: {}, local: !form_with_generates_remote_forms,
-          skip_enforcing_utf8: false, **options)
+          skip_enforcing_utf8: nil, **options)
           html_options = options.slice(:id, :class, :multipart, :method, :data).merge(html)
           html_options[:method] ||= :patch if model.respond_to?(:persisted?) && model.persisted?
-          html_options[:enforce_utf8] = !skip_enforcing_utf8
+          html_options[:enforce_utf8] = !skip_enforcing_utf8 unless skip_enforcing_utf8.nil?
 
           html_options[:enctype] = "multipart/form-data" if html_options.delete(:multipart)
 
@@ -1677,6 +1658,7 @@ module ActionView
         @nested_child_index = {}
         @object_name, @object, @template, @options = object_name, object, template, options
         @default_options = @options ? @options.slice(:index, :namespace, :skip_default_ids, :allow_method_names_outside_object) : {}
+        @default_html_options = @default_options.except(:skip_default_ids, :allow_method_names_outside_object)
 
         convert_to_legacy_options(@options)
 
@@ -1985,11 +1967,11 @@ module ActionView
       # See the docs for the <tt>ActionView::FormHelper.fields</tt> helper method.
       def fields(scope = nil, model: nil, **options, &block)
         options[:allow_method_names_outside_object] = true
-        options[:skip_default_ids] = true
+        options[:skip_default_ids] = !FormHelper.form_with_generates_ids
 
         convert_to_legacy_options(options)
 
-        fields_for(scope || model, model, **options, &block)
+        fields_for(scope || model, model, options, &block)
       end
 
       # Returns a label tag tailored for labelling an input field for a specified attribute (identified by +method+) on an object
@@ -2265,7 +2247,7 @@ module ActionView
         @template.button_tag(value, options, &block)
       end
 
-      def emitted_hidden_id?
+      def emitted_hidden_id? # :nodoc:
         @emitted_hidden_id ||= nil
       end
 
@@ -2285,7 +2267,12 @@ module ActionView
           end
 
           defaults = []
-          defaults << :"helpers.submit.#{object_name}.#{key}"
+          # Object is a model and it is not overwritten by as and scope option.
+          if object.respond_to?(:model_name) && object_name.to_s == model.downcase
+            defaults << :"helpers.submit.#{object.model_name.i18n_key}.#{key}"
+          else
+            defaults << :"helpers.submit.#{object_name}.#{key}"
+          end
           defaults << :"helpers.submit.#{key}"
           defaults << "#{key.to_s.humanize} #{model}"
 

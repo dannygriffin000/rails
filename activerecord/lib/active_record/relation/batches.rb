@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "batches/batch_enumerator"
+require "active_record/relation/batches/batch_enumerator"
 
 module ActiveRecord
   module Batches
@@ -251,20 +251,30 @@ module ActiveRecord
           end
         end
 
-        batch_relation = relation.where(arel_attribute(primary_key).gt(primary_key_offset))
+        batch_relation = relation.where(
+          bind_attribute(primary_key, primary_key_offset) { |attr, bind| attr.gt(bind) }
+        )
       end
     end
 
     private
 
       def apply_limits(relation, start, finish)
-        relation = relation.where(arel_attribute(primary_key).gteq(start)) if start
-        relation = relation.where(arel_attribute(primary_key).lteq(finish)) if finish
+        relation = apply_start_limit(relation, start) if start
+        relation = apply_finish_limit(relation, finish) if finish
         relation
       end
 
+      def apply_start_limit(relation, start)
+        relation.where(bind_attribute(primary_key, start) { |attr, bind| attr.gteq(bind) })
+      end
+
+      def apply_finish_limit(relation, finish)
+        relation.where(bind_attribute(primary_key, finish) { |attr, bind| attr.lteq(bind) })
+      end
+
       def batch_order
-        "#{quoted_table_name}.#{quoted_primary_key} ASC"
+        arel_attribute(primary_key).asc
       end
 
       def act_on_ignored_order(error_on_ignore)

@@ -18,6 +18,13 @@ module ActiveRecord
       mattr_accessor :logger, instance_writer: false
 
       ##
+      # :singleton-method:
+      #
+      # Specifies if the methods calling database queries should be logged below
+      # their relevant queries. Defaults to false.
+      mattr_accessor :verbose_query_logs, instance_writer: false, default: false
+
+      ##
       # Contains the database configuration - as is typically stored in config/database.yml -
       # as a Hash.
       #
@@ -76,25 +83,13 @@ module ActiveRecord
       # scope being ignored is error-worthy, rather than a warning.
       mattr_accessor :error_on_ignored_order, instance_writer: false, default: false
 
-      def self.error_on_ignored_order_or_limit
-        ActiveSupport::Deprecation.warn(<<-MSG.squish)
-          The flag error_on_ignored_order_or_limit is deprecated. Limits are
-          now supported. Please use error_on_ignored_order instead.
-        MSG
-        error_on_ignored_order
-      end
-
-      def error_on_ignored_order_or_limit
-        self.class.error_on_ignored_order_or_limit
-      end
-
-      def self.error_on_ignored_order_or_limit=(value)
-        ActiveSupport::Deprecation.warn(<<-MSG.squish)
-          The flag error_on_ignored_order_or_limit is deprecated. Limits are
-          now supported. Please use error_on_ignored_order= instead.
-        MSG
-        self.error_on_ignored_order = value
-      end
+      # :singleton-method:
+      # Specify the behavior for unsafe raw query methods. Values are as follows
+      #   deprecated - Warnings are logged when unsafe raw SQL is passed to
+      #                query methods.
+      #   disabled   - Unsafe raw SQL passed to query methods results in
+      #                UnknownAttributeReference exception.
+      mattr_accessor :allow_unsafe_raw_sql, instance_writer: false, default: :deprecated
 
       ##
       # :singleton-method:
@@ -144,11 +139,6 @@ module ActiveRecord
     end
 
     module ClassMethods # :nodoc:
-      def allocate
-        define_attribute_methods
-        super
-      end
-
       def initialize_find_by_cache # :nodoc:
         @find_by_statement_cache = { true => Concurrent::Map.new, false => Concurrent::Map.new }
       end
@@ -286,10 +276,11 @@ module ActiveRecord
         end
 
         def relation
-          relation = Relation.create(self, arel_table, predicate_builder)
+          relation = Relation.create(self)
 
           if finder_needs_type_condition? && !ignore_default_scope?
-            relation.where(type_condition).create_with(inheritance_column.to_s => sti_name)
+            relation.where!(type_condition)
+            relation.create_with!(inheritance_column.to_s => sti_name)
           else
             relation
           end
@@ -354,6 +345,28 @@ module ActiveRecord
     end
 
     ##
+    # Initializer used for instantiating objects that have been read from the
+    # database.  +attributes+ should be an attributes object, and unlike the
+    # `initialize` method, no assignment calls are made per attribute.
+    #
+    # :nodoc:
+    def init_from_db(attributes)
+      init_internals
+
+      @new_record = false
+      @attributes = attributes
+
+      self.class.define_attribute_methods
+
+      yield self if block_given?
+
+      _run_find_callbacks
+      _run_initialize_callbacks
+
+      self
+    end
+
+    ##
     # :method: clone
     # Identical to Ruby's clone method.  This is a "shallow" copy.  Be warned that your attributes are not copied.
     # That means that modifying attributes of the clone will modify the original, since they will both point to the
@@ -386,8 +399,10 @@ module ActiveRecord
 
       _run_initialize_callbacks
 
-      @new_record  = true
-      @destroyed   = false
+      @new_record               = true
+      @destroyed                = false
+      @_start_transaction_state = {}
+      @transaction_state        = nil
 
       super
     end

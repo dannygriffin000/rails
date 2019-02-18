@@ -71,10 +71,17 @@ class ActionsTest < Rails::Generators::TestCase
 
   def test_gem_with_version_should_include_version_in_gemfile
     run_generator
+    action :gem, "rspec", ">= 2.0.0.a5"
+    action :gem, "RedCloth", ">= 4.1.0", "< 4.2.0"
+    action :gem, "nokogiri", version: ">= 1.4.2"
+    action :gem, "faker", version: [">= 0.1.0", "< 0.3.0"]
 
-    action :gem, "rspec", ">=2.0.0.a5"
-
-    assert_file "Gemfile", /gem 'rspec', '>=2.0.0.a5'/
+    assert_file "Gemfile" do |content|
+      assert_match(/gem 'rspec', '>= 2\.0\.0\.a5'/, content)
+      assert_match(/gem 'RedCloth', '>= 4\.1\.0', '< 4\.2\.0'/, content)
+      assert_match(/gem 'nokogiri', '>= 1\.4\.2'/, content)
+      assert_match(/gem 'faker', '>= 0\.1\.0', '< 0\.3\.0'/, content)
+    end
   end
 
   def test_gem_should_insert_on_separate_lines
@@ -301,6 +308,14 @@ class ActionsTest < Rails::Generators::TestCase
     end
   end
 
+  test "rake command with capture option should run rake command with capture" do
+    assert_called_with(generator, :run, ["rake log:clear RAILS_ENV=development", verbose: false, capture: true]) do
+      with_rails_env nil do
+        action :rake, "log:clear", capture: true
+      end
+    end
+  end
+
   test "rails command should run rails_command with default env" do
     assert_called_with(generator, :run, ["rails log:clear RAILS_ENV=development", verbose: false]) do
       with_rails_env nil do
@@ -335,6 +350,14 @@ class ActionsTest < Rails::Generators::TestCase
     assert_called_with(generator, :run, ["sudo rails log:clear RAILS_ENV=development", verbose: false]) do
       with_rails_env nil do
         action :rails_command, "log:clear", sudo: true
+      end
+    end
+  end
+
+  test "rails command with capture option should run rails_command with capture" do
+    assert_called_with(generator, :run, ["rails log:clear RAILS_ENV=development", verbose: false, capture: true]) do
+      with_rails_env nil do
+        action :rails_command, "log:clear", capture: true
       end
     end
   end
@@ -380,7 +403,7 @@ class ActionsTest < Rails::Generators::TestCase
     content.gsub!(/^  \#.*\n/, "")
     content.gsub!(/^\n/, "")
 
-    File.open(route_path, "wb") { |file| file.write(content) }
+    File.write(route_path, content)
 
     routes = <<-F
 Rails.application.routes.draw do

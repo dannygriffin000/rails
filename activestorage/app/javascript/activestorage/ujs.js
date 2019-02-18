@@ -53,12 +53,13 @@ function submitForm(form) {
   if (button) {
     const { disabled } = button
     button.disabled = false
+    button.focus()
     button.click()
     button.disabled = disabled
   } else {
     button = document.createElement("input")
     button.type = "submit"
-    button.style = "display:none"
+    button.style.display = "none"
     form.appendChild(button)
     button.click()
     form.removeChild(button)

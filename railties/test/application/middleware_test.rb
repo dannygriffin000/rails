@@ -42,9 +42,11 @@ module ApplicationTests
         "ActionDispatch::Cookies",
         "ActionDispatch::Session::CookieStore",
         "ActionDispatch::Flash",
+        "ActionDispatch::ContentSecurityPolicy::Middleware",
         "Rack::Head",
         "Rack::ConditionalGet",
-        "Rack::ETag"
+        "Rack::ETag",
+        "Rack::TempfileReaper"
       ], middleware
     end
 
@@ -248,7 +250,7 @@ module ApplicationTests
 
     test "can't change middleware after it's built" do
       boot!
-      assert_raise RuntimeError do
+      assert_raise frozen_error_class do
         app.config.middleware.use Rack::Config
       end
     end

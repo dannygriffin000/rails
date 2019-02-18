@@ -1,4 +1,4 @@
-**DO NOT READ THIS FILE ON GITHUB, GUIDES ARE PUBLISHED ON http://guides.rubyonrails.org.**
+**DO NOT READ THIS FILE ON GITHUB, GUIDES ARE PUBLISHED ON https://guides.rubyonrails.org.**
 
 The Asset Pipeline
 ==================
@@ -20,10 +20,9 @@ What is the Asset Pipeline?
 
 The asset pipeline provides a framework to concatenate and minify or compress
 JavaScript and CSS assets. It also adds the ability to write these assets in
-other languages and pre-processors such as CoffeeScript, Sass and ERB.
+other languages and pre-processors such as CoffeeScript, Sass, and ERB.
 It allows assets in your application to be automatically combined with assets
-from other gems. For example, jquery-rails includes a copy of jquery.js
-and enables AJAX features in Rails.
+from other gems.
 
 The asset pipeline is implemented by the
 [sprockets-rails](https://github.com/rails/sprockets-rails) gem,
@@ -35,7 +34,7 @@ rails new appname --skip-sprockets
 ```
 
 Rails automatically adds the `sass-rails`, `coffee-rails` and `uglifier`
-gems to your Gemfile, which are used by Sprockets for asset compression:
+gems to your `Gemfile`, which are used by Sprockets for asset compression:
 
 ```ruby
 gem 'sass-rails'
@@ -44,8 +43,8 @@ gem 'coffee-rails'
 ```
 
 Using the `--skip-sprockets` option will prevent Rails from adding
-them to your Gemfile, so if you later want to enable
-the asset pipeline you will have to add those gems to your Gemfile. Also,
+them to your `Gemfile`, so if you later want to enable
+the asset pipeline you will have to add those gems to your `Gemfile`. Also,
 creating an application with the `--skip-sprockets` option will generate
 a slightly different `config/application.rb` file, with a require statement
 for the sprockets railtie that is commented-out. You will have to remove
@@ -65,7 +64,7 @@ config.assets.js_compressor = :uglifier
 ```
 
 NOTE: The `sass-rails` gem is automatically used for CSS compression if included
-in the Gemfile and no `config.assets.css_compressor` option is set.
+in the `Gemfile` and no `config.assets.css_compressor` option is set.
 
 
 ### Main Features
@@ -154,7 +153,7 @@ environments. You can enable or disable it in your configuration through the
 
 More reading:
 
-* [Optimize caching](http://code.google.com/speed/page-speed/docs/caching.html)
+* [Optimize caching](https://developers.google.com/speed/docs/insights/LeverageBrowserCaching)
 * [Revving Filenames: don't use querystring](http://www.stevesouders.com/blog/2008/08/23/revving-filenames-dont-use-querystring/)
 
 
@@ -181,7 +180,7 @@ When you generate a scaffold or a controller, Rails also generates a JavaScript
 file (or CoffeeScript file if the `coffee-rails` gem is in the `Gemfile`) and a
 Cascading Style Sheet file (or SCSS file if `sass-rails` is in the `Gemfile`)
 for that controller. Additionally, when generating a scaffold, Rails generates
-the file scaffolds.css (or scaffolds.scss if `sass-rails` is in the
+the file `scaffolds.css` (or `scaffolds.scss` if `sass-rails` is in the
 `Gemfile`.)
 
 For example, if you generate a `ProjectsController`, Rails will also add a new
@@ -202,7 +201,7 @@ will result in your assets being included more than once.
 
 WARNING: When using asset precompilation, you will need to ensure that your
 controller assets will be precompiled when loading them on a per page basis. By
-default .coffee and .scss files will not be precompiled on their own. See
+default `.coffee` and `.scss` files will not be precompiled on their own. See
 [Precompiling Assets](#precompiling-assets) for more information on how
 precompiling works.
 
@@ -225,7 +224,7 @@ Pipeline assets can be placed inside an application in one of three locations:
 `app/assets`, `lib/assets` or `vendor/assets`.
 
 * `app/assets` is for assets that are owned by the application, such as custom
-images, JavaScript files or stylesheets.
+images, JavaScript files, or stylesheets.
 
 * `lib/assets` is for your own libraries' code that doesn't really fit into the
 scope of the application or those libraries which are shared across applications.
@@ -435,7 +434,7 @@ Sprockets uses manifest files to determine which assets to include and serve.
 These manifest files contain _directives_ - instructions that tell Sprockets
 which files to require in order to build a single CSS or JavaScript file. With
 these directives, Sprockets loads the files specified, processes them if
-necessary, concatenates them into one single file and then compresses them
+necessary, concatenates them into one single file, and then compresses them
 (based on value of `Rails.application.config.assets.js_compressor`). By serving
 one file rather than many, the load time of pages can be greatly reduced because
 the browser makes fewer requests. Compression also reduces file size, enabling
@@ -674,20 +673,20 @@ content changes.
 
 ### Precompiling Assets
 
-Rails comes bundled with a task to compile the asset manifests and other
+Rails comes bundled with a command to compile the asset manifests and other
 files in the pipeline.
 
 Compiled assets are written to the location specified in `config.assets.prefix`.
 By default, this is the `/assets` directory.
 
-You can call this task on the server during deployment to create compiled
+You can call this command on the server during deployment to create compiled
 versions of your assets directly on the server. See the next section for
 information on compiling locally.
 
-The task is:
+The command is:
 
 ```bash
-$ RAILS_ENV=production bin/rails assets:precompile
+$ RAILS_ENV=production rails assets:precompile
 ```
 
 Capistrano (v2.15.1 and above) includes a recipe to handle this in deployment.
@@ -699,7 +698,7 @@ load 'deploy/assets'
 
 This links the folder specified in `config.assets.prefix` to `shared/assets`.
 If you already use this shared folder you'll need to write your own deployment
-task.
+command.
 
 It is important that this folder is shared between deployments so that remotely
 cached pages referencing the old compiled assets still work for the life of
@@ -726,11 +725,11 @@ include, you can add them to the `precompile` array in `config/initializers/asse
 Rails.application.config.assets.precompile += %w( admin.js admin.css )
 ```
 
-NOTE. Always specify an expected compiled filename that ends with .js or .css,
+NOTE. Always specify an expected compiled filename that ends with `.js` or `.css`,
 even if you want to add Sass or CoffeeScript files to the precompile array.
 
-The task also generates a `.sprockets-manifest-md5hash.json` (where `md5hash` is
-an MD5 hash) that contains a list with all your assets and their respective
+The command also generates a `.sprockets-manifest-randomhex.json` (where `randomhex` is
+a 16-byte random hex string) that contains a list with all your assets and their respective
 fingerprints. This is used by the Rails helper methods to avoid handing the
 mapping requests back to Sprockets. A typical manifest file looks like:
 
@@ -846,11 +845,11 @@ signals all caches between your server and the client browser that this content
 number of requests for this asset from your server; the asset has a good chance
 of being in the local browser cache or some intermediate cache.
 
-This mode uses more memory, performs more poorly than the default and is not
+This mode uses more memory, performs more poorly than the default, and is not
 recommended.
 
 If you are deploying a production application to a system without any
-pre-existing JavaScript runtimes, you may want to add one to your Gemfile:
+pre-existing JavaScript runtimes, you may want to add one to your `Gemfile`:
 
 ```ruby
 group :production do
@@ -918,7 +917,7 @@ config.action_controller.asset_host = ENV['CDN_HOST']
 
 
 
-Note: You would need to set `CDN_HOST` on your server to `mycdnsubdomain
+NOTE: You would need to set `CDN_HOST` on your server to `mycdnsubdomain
 .fictional-cdn.com` for this to work.
 
 Once you have configured your server and your CDN when you serve a webpage that
@@ -1090,7 +1089,7 @@ Possible options for JavaScript compression are `:closure`, `:uglifier` and
 `:yui`. These require the use of the `closure-compiler`, `uglifier` or
 `yui-compressor` gems, respectively.
 
-The default Gemfile includes [uglifier](https://github.com/lautis/uglifier).
+The default `Gemfile` includes [uglifier](https://github.com/lautis/uglifier).
 This gem wraps [UglifyJS](https://github.com/mishoo/UglifyJS) (written for
 NodeJS) in Ruby. It compresses your code by removing white space and comments,
 shortening local variable names, and performing other micro-optimizations such
@@ -1205,10 +1204,10 @@ Adding Assets to Your Gems
 
 Assets can also come from external sources in the form of gems.
 
-A good example of this is the `jquery-rails` gem which comes with Rails as the
-standard JavaScript library gem. This gem contains an engine class which
-inherits from `Rails::Engine`. By doing this, Rails is informed that the
-directory for this gem may contain assets and the `app/assets`, `lib/assets` and
+A good example of this is the `jquery-rails` gem.
+This gem contains an engine class which inherits from `Rails::Engine`.
+By doing this, Rails is informed that the directory for this
+gem may contain assets and the `app/assets`, `lib/assets` and
 `vendor/assets` directories of this engine are added to the search path of
 Sprockets.
 
@@ -1219,7 +1218,7 @@ Sprockets uses Processors, Transformers, Compressors, and Exporters to extend
 Sprockets functionality. Have a look at
 [Extending Sprockets](https://github.com/rails/sprockets/blob/master/guides/extending_sprockets.md)
 to learn more. Here we registered a preprocessor to add a comment to the end
-of text/css (.css) files.
+of text/css (`.css`) files.
 
 ```ruby
 module AddComment
@@ -1244,11 +1243,7 @@ moving the files from `public/` to the new locations. See [Asset
 Organization](#asset-organization) above for guidance on the correct locations
 for different file types.
 
-Next will be avoiding duplicate JavaScript files. Since jQuery is the default
-JavaScript library from Rails 3.1 onwards, you don't need to copy `jquery.js`
-into `app/assets` and it will be included automatically.
-
-The third is updating the various environment files with the correct default
+Next is updating the various environment files with the correct default
 options.
 
 In `application.rb`:

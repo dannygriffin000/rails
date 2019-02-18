@@ -204,12 +204,12 @@ class SchemaTest < ActiveRecord::PostgreSQLTestCase
 
   def test_data_source_exists_when_not_on_schema_search_path
     with_schema_search_path("PUBLIC") do
-      assert(!@connection.data_source_exists?(TABLE_NAME), "data_source exists but should not be found")
+      assert_not(@connection.data_source_exists?(TABLE_NAME), "data_source exists but should not be found")
     end
   end
 
   def test_data_source_exists_wrong_schema
-    assert(!@connection.data_source_exists?("foo.things"), "data_source should not exist")
+    assert_not(@connection.data_source_exists?("foo.things"), "data_source should not exist")
   end
 
   def test_data_source_exists_quoted_names
@@ -459,7 +459,7 @@ class SchemaTest < ActiveRecord::PostgreSQLTestCase
         assert_equal :btree, index_d.using
         assert_equal :gin,   index_e.using
 
-        assert_equal :desc,  index_d.orders[INDEX_D_COLUMN]
+        assert_equal :desc,  index_d.orders
       end
     end
 
@@ -500,6 +500,66 @@ class SchemaForeignKeyTest < ActiveRecord::PostgreSQLTestCase
   end
 end
 
+class SchemaIndexOpclassTest < ActiveRecord::PostgreSQLTestCase
+  include SchemaDumpingHelper
+
+  setup do
+    @connection = ActiveRecord::Base.connection
+    @connection.create_table "trains" do |t|
+      t.string :name
+      t.text :description
+    end
+  end
+
+  teardown do
+    @connection.drop_table "trains", if_exists: true
+  end
+
+  def test_string_opclass_is_dumped
+    @connection.execute "CREATE INDEX trains_name_and_description ON trains USING btree(name text_pattern_ops, description text_pattern_ops)"
+
+    output = dump_table_schema "trains"
+
+    assert_match(/opclass: :text_pattern_ops/, output)
+  end
+
+  def test_non_default_opclass_is_dumped
+    @connection.execute "CREATE INDEX trains_name_and_description ON trains USING btree(name, description text_pattern_ops)"
+
+    output = dump_table_schema "trains"
+
+    assert_match(/opclass: \{ description: :text_pattern_ops \}/, output)
+  end
+end
+
+class SchemaIndexNullsOrderTest < ActiveRecord::PostgreSQLTestCase
+  include SchemaDumpingHelper
+
+  setup do
+    @connection = ActiveRecord::Base.connection
+    @connection.create_table "trains" do |t|
+      t.string :name
+      t.text :description
+    end
+  end
+
+  teardown do
+    @connection.drop_table "trains", if_exists: true
+  end
+
+  def test_nulls_order_is_dumped
+    @connection.execute "CREATE INDEX trains_name_and_description ON trains USING btree(name NULLS FIRST, description)"
+    output = dump_table_schema "trains"
+    assert_match(/order: \{ name: "NULLS FIRST" \}/, output)
+  end
+
+  def test_non_default_order_with_nulls_is_dumped
+    @connection.execute "CREATE INDEX trains_name_and_desc ON trains USING btree(name DESC NULLS LAST, description)"
+    output = dump_table_schema "trains"
+    assert_match(/order: \{ name: "DESC NULLS LAST" \}/, output)
+  end
+end
+
 class DefaultsUsingMultipleSchemasAndDomainTest < ActiveRecord::PostgreSQLTestCase
   setup do
     @connection = ActiveRecord::Base.connection
@@ -534,7 +594,7 @@ class DefaultsUsingMultipleSchemasAndDomainTest < ActiveRecord::PostgreSQLTestCa
   end
 
   def test_decimal_defaults_in_new_schema_when_overriding_domain
-    assert_equal BigDecimal.new("3.14159265358979323846"), Default.new.decimal_col, "Default of decimal column was not correctly parsed"
+    assert_equal BigDecimal("3.14159265358979323846"), Default.new.decimal_col, "Default of decimal column was not correctly parsed"
   end
 
   def test_bpchar_defaults_in_new_schema_when_overriding_domain

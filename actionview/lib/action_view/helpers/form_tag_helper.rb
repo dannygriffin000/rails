@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
 require "cgi"
-require_relative "tag_helper"
+require "action_view/helpers/tag_helper"
 require "active_support/core_ext/string/output_safety"
 require "active_support/core_ext/module/attribute_accessors"
 
 module ActionView
   # = Action View Form Tag Helpers
-  module Helpers
+  module Helpers #:nodoc:
     # Provides a number of methods for creating form tags that don't rely on an Active Record object assigned to the template like
     # FormHelper does. Instead, you provide the names and values manually.
     #
@@ -21,6 +21,8 @@ module ActionView
 
       mattr_accessor :embed_authenticity_token_in_remote_forms
       self.embed_authenticity_token_in_remote_forms = nil
+
+      mattr_accessor :default_enforce_utf8, default: true
 
       # Starts a form tag that points the action to a url configured with <tt>url_for_options</tt> just like
       # ActionController::Base#url_for. The method for the form defaults to POST.
@@ -115,7 +117,7 @@ module ActionView
       #   #    <option>Write</option></select>
       #
       #   select_tag "people", options_from_collection_for_select(@people, "id", "name"), include_blank: true
-      #   # => <select id="people" name="people"><option value=""></option><option value="1">David</option></select>
+      #   # => <select id="people" name="people"><option value="" label=" "></option><option value="1">David</option></select>
       #
       #   select_tag "people", options_from_collection_for_select(@people, "id", "name"), include_blank: "All"
       #   # => <select id="people" name="people"><option value="">All</option><option value="1">David</option></select>
@@ -387,14 +389,14 @@ module ActionView
       # * Any other key creates standard HTML options for the tag.
       #
       # ==== Examples
-      #   radio_button_tag 'gender', 'male'
-      #   # => <input id="gender_male" name="gender" type="radio" value="male" />
+      #   radio_button_tag 'favorite_color', 'maroon'
+      #   # => <input id="favorite_color_maroon" name="favorite_color" type="radio" value="maroon" />
       #
       #   radio_button_tag 'receive_updates', 'no', true
       #   # => <input checked="checked" id="receive_updates_no" name="receive_updates" type="radio" value="no" />
       #
       #   radio_button_tag 'time_slot', "3:00 p.m.", false, disabled: true
-      #   # => <input disabled="disabled" id="time_slot_300_pm" name="time_slot" type="radio" value="3:00 p.m." />
+      #   # => <input disabled="disabled" id="time_slot_3:00_p.m." name="time_slot" type="radio" value="3:00 p.m." />
       #
       #   radio_button_tag 'color', "green", true, class: "color_input"
       #   # => <input checked="checked" class="color_input" id="color_green" name="color" type="radio" value="green" />
@@ -456,7 +458,7 @@ module ActionView
       # submit tag but it isn't supported in legacy browsers. However,
       # the button tag does allow for richer labels such as images and emphasis,
       # so this helper will also accept a block. By default, it will create
-      # a button tag with type `submit`, if type is not given.
+      # a button tag with type <tt>submit</tt>, if type is not given.
       #
       # ==== Options
       # * <tt>:data</tt> - This option can be used to add custom data attributes.
@@ -549,7 +551,8 @@ module ActionView
       #   # => <input src="/assets/save.png" data-confirm="Are you sure?" type="image" />
       def image_submit_tag(source, options = {})
         options = options.stringify_keys
-        tag :input, { "type" => "image", "src" => path_to_image(source) }.update(options)
+        src = path_to_image(source, skip_pipeline: options.delete("skip_pipeline"))
+        tag :input, { "type" => "image", "src" => src }.update(options)
       end
 
       # Creates a field set for grouping HTML form elements.
@@ -866,7 +869,7 @@ module ActionView
               })
             end
 
-          if html_options.delete("enforce_utf8") { true }
+          if html_options.delete("enforce_utf8") { default_enforce_utf8 }
             utf8_enforcer_tag + method_tag
           else
             method_tag

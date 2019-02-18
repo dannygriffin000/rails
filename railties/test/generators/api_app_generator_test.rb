@@ -13,7 +13,7 @@ class ApiAppGeneratorTest < Rails::Generators::TestCase
     Rails.application = TestApp::Application
     super
 
-    Kernel::silence_warnings do
+    Kernel.silence_warnings do
       Thor::Base.shell.send(:attr_accessor, :always_force)
       @shell = Thor::Base.shell.new
       @shell.send(:always_force=, true)
@@ -63,6 +63,23 @@ class ApiAppGeneratorTest < Rails::Generators::TestCase
     end
   end
 
+  def test_generator_if_skip_action_mailer_is_given
+    run_generator [destination_root, "--api", "--skip-action-mailer"]
+    assert_file "config/application.rb", /#\s+require\s+["']action_mailer\/railtie["']/
+    assert_file "config/environments/development.rb" do |content|
+      assert_no_match(/config\.action_mailer/, content)
+    end
+    assert_file "config/environments/test.rb" do |content|
+      assert_no_match(/config\.action_mailer/, content)
+    end
+    assert_file "config/environments/production.rb" do |content|
+      assert_no_match(/config\.action_mailer/, content)
+    end
+    assert_no_directory "app/mailers"
+    assert_no_directory "test/mailers"
+    assert_no_directory "app/views"
+  end
+
   def test_app_update_does_not_generate_unnecessary_config_files
     run_generator
 
@@ -72,6 +89,7 @@ class ApiAppGeneratorTest < Rails::Generators::TestCase
 
     assert_no_file "config/initializers/cookies_serializer.rb"
     assert_no_file "config/initializers/assets.rb"
+    assert_no_file "config/initializers/content_security_policy.rb"
   end
 
   def test_app_update_does_not_generate_unnecessary_bin_files
@@ -125,7 +143,7 @@ class ApiAppGeneratorTest < Rails::Generators::TestCase
         config/locales/en.yml
         config/puma.rb
         config/routes.rb
-        config/secrets.yml
+        config/credentials.yml.enc
         config/spring.rb
         config/storage.yml
         db
@@ -149,6 +167,7 @@ class ApiAppGeneratorTest < Rails::Generators::TestCase
          bin/yarn
          config/initializers/assets.rb
          config/initializers/cookies_serializer.rb
+         config/initializers/content_security_policy.rb
          lib/assets
          test/helpers
          tmp/cache/assets

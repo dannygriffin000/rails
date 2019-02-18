@@ -13,6 +13,7 @@ module ActiveRecord
       register_handler(Range, RangeHandler.new(self))
       register_handler(Relation, RelationHandler.new)
       register_handler(Array, ArrayHandler.new(self))
+      register_handler(Set, ArrayHandler.new(self))
     end
 
     def build_from_hash(attributes)
@@ -47,7 +48,12 @@ module ActiveRecord
     end
 
     def build(attribute, value)
-      handler_for(value).call(attribute, value)
+      if table.type(attribute.name).force_equality?(value)
+        bind = build_bind_attribute(attribute.name, value)
+        attribute.eq(bind)
+      else
+        handler_for(value).call(attribute, value)
+      end
     end
 
     def build_bind_attribute(column_name, value)
@@ -56,9 +62,6 @@ module ActiveRecord
     end
 
     protected
-
-      attr_reader :table
-
       def expand_from_hash(attributes)
         return ["1=0"] if attributes.empty?
 
@@ -85,10 +88,18 @@ module ActiveRecord
               expand_from_hash(query).reduce(&:and)
             end
             queries.reduce(&:or)
-          # FIXME: Deprecate this and provide a public API to force equality
-          elsif (value.is_a?(Range) || value.is_a?(Array)) &&
-            table.type(key.to_s).respond_to?(:subtype)
-            BasicObjectHandler.new(self).call(table.arel_attribute(key), value)
+          elsif table.aggregated_with?(key)
+            mapping = table.reflect_on_aggregation(key).mapping
+            queries = Array.wrap(value).map do |object|
+              mapping.map do |field_attr, aggregate_attr|
+                if mapping.size == 1 && !object.respond_to?(aggregate_attr)
+                  build(table.arel_attribute(field_attr), object)
+                else
+                  build(table.arel_attribute(field_attr), object.send(aggregate_attr))
+                end
+              end.reduce(&:and)
+            end
+            queries.reduce(&:or)
           else
             build(table.arel_attribute(key), value)
           end
@@ -96,6 +107,7 @@ module ActiveRecord
       end
 
     private
+      attr_reader :table
 
       def associated_predicate_builder(association_name)
         self.class.new(table.associated_table(association_name))
@@ -123,11 +135,11 @@ module ActiveRecord
   end
 end
 
-require_relative "predicate_builder/array_handler"
-require_relative "predicate_builder/base_handler"
-require_relative "predicate_builder/basic_object_handler"
-require_relative "predicate_builder/range_handler"
-require_relative "predicate_builder/relation_handler"
+require "active_record/relation/predicate_builder/array_handler"
+require "active_record/relation/predicate_builder/base_handler"
+require "active_record/relation/predicate_builder/basic_object_handler"
+require "active_record/relation/predicate_builder/range_handler"
+require "active_record/relation/predicate_builder/relation_handler"
 
-require_relative "predicate_builder/association_query_value"
-require_relative "predicate_builder/polymorphic_array_value"
+require "active_record/relation/predicate_builder/association_query_value"
+require "active_record/relation/predicate_builder/polymorphic_array_value"

@@ -90,6 +90,32 @@ module ActiveRecord
       def logger
         ActiveRecord::Base.logger
       end
+
+      def debug(progname = nil, &block)
+        return unless super
+
+        if ActiveRecord::Base.verbose_query_logs
+          log_query_source
+        end
+      end
+
+      def log_query_source
+        location = extract_query_source_location(caller_locations)
+
+        if location
+          source = "#{location.path}:#{location.lineno}"
+          source = source.sub("#{::Rails.root}/", "") if defined?(::Rails.root)
+
+          logger.debug("  ↳ #{source}")
+        end
+      end
+
+      RAILS_GEM_ROOT  = File.expand_path("../../..", __dir__) + "/"
+      PATHS_TO_IGNORE = /\A(#{RAILS_GEM_ROOT}|#{RbConfig::CONFIG["rubylibdir"]})/
+
+      def extract_query_source_location(locations)
+        locations.find { |line| line.absolute_path && !line.absolute_path.match?(PATHS_TO_IGNORE) }
+      end
   end
 end
 

@@ -9,7 +9,7 @@ module ActiveStorage
   class Service::MirrorService < Service
     attr_reader :primary, :mirrors
 
-    delegate :download, :exist?, :url, to: :primary
+    delegate :download, :download_chunk, :exist?, :url, to: :primary
 
     # Stitch together from named services.
     def self.build(primary:, mirrors:, configurator:, **options) #:nodoc:
@@ -33,6 +33,11 @@ module ActiveStorage
     # Delete the file at the +key+ on all services.
     def delete(key)
       perform_across_services :delete, key
+    end
+
+    # Delete files at keys starting with the +prefix+ on all services.
+    def delete_prefixed(prefix)
+      perform_across_services :delete_prefixed, prefix
     end
 
     private

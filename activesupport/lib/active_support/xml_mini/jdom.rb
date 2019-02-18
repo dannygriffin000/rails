@@ -5,7 +5,7 @@ raise "JRuby is required to use the JDOM backend for XmlMini" unless RUBY_PLATFO
 require "jruby"
 include Java
 
-require_relative "../core_ext/object/blank"
+require "active_support/core_ext/object/blank"
 
 java_import javax.xml.parsers.DocumentBuilder unless defined? DocumentBuilder
 java_import javax.xml.parsers.DocumentBuilderFactory unless defined? DocumentBuilderFactory
@@ -169,7 +169,7 @@ module ActiveSupport
       # element::
       #   XML element to be checked.
       def empty_content?(element)
-        text = ""
+        text = "".dup
         child_nodes = element.child_nodes
         (0...child_nodes.length).each do |i|
           item = child_nodes.item(i)

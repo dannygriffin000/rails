@@ -1,4 +1,4 @@
-**DO NOT READ THIS FILE ON GITHUB, GUIDES ARE PUBLISHED ON http://guides.rubyonrails.org.**
+**DO NOT READ THIS FILE ON GITHUB, GUIDES ARE PUBLISHED ON https://guides.rubyonrails.org.**
 
 Active Record Callbacks
 =======================
@@ -184,9 +184,9 @@ class Company < ApplicationRecord
   after_touch :log_when_employees_or_company_touched
 
   private
-  def log_when_employees_or_company_touched
-    puts 'Employee/Company was touched'
-  end
+    def log_when_employees_or_company_touched
+      puts 'Employee/Company was touched'
+    end
 end
 
 >> @employee = Employee.last
@@ -194,8 +194,8 @@ end
 
 # triggers @employee.company.touch
 >> @employee.touch
-Employee/Company was touched
 An Employee was touched
+Employee/Company was touched
 => true
 ```
 
@@ -213,6 +213,7 @@ The following methods trigger callbacks:
 * `save!`
 * `save(validate: false)`
 * `toggle!`
+* `touch`
 * `update_attribute`
 * `update`
 * `update!`
@@ -245,7 +246,6 @@ Just as with validations, it is also possible to skip callbacks by using the fol
 * `increment`
 * `increment_counter`
 * `toggle`
-* `touch`
 * `update_column`
 * `update_columns`
 * `update_all`
@@ -264,7 +264,7 @@ The whole callback chain is wrapped in a transaction. If any callback raises an 
 throw :abort
 ```
 
-WARNING. Any exception that is not `ActiveRecord::Rollback` or `ActiveRecord::RecordInvalid` will be re-raised by Rails after the callback chain is halted. Raising an exception other than `ActiveRecord::Rollback` or `ActiveRecord::RecordInvalid` may break code that does not expect methods like `save` and `update_attributes` (which normally try to return `true` or `false`) to raise an exception.
+WARNING. Any exception that is not `ActiveRecord::Rollback` or `ActiveRecord::RecordInvalid` will be re-raised by Rails after the callback chain is halted. Raising an exception other than `ActiveRecord::Rollback` or `ActiveRecord::RecordInvalid` may break code that does not expect methods like `save` and `update` (which normally try to return `true` or `false`) to raise an exception.
 
 Relational Callbacks
 --------------------
@@ -408,7 +408,7 @@ end
 NOTE: The `:on` option specifies when a callback will be fired. If you
 don't supply the `:on` option the callback will fire for every action.
 
-Since using `after_commit` callback only on create, update or delete is
+Since using `after_commit` callback only on create, update, or delete is
 common, there are aliases for those operations:
 
 * `after_create_commit`

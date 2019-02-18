@@ -1,190 +1,183 @@
-*   `Module#delegate_missing_to` now raises `DelegationError` if target is nil,
-    similar to `Module#delegate`.
+*   Add "event object" support to the notification system.
+    Before this change, end users were forced to create hand made artisanal
+    event objects on their own, like this:
 
-    *Anton Khamets*
+        ActiveSupport::Notifications.subscribe('wait') do |*args|
+          @event = ActiveSupport::Notifications::Event.new(*args)
+        end
+        
+        ActiveSupport::Notifications.instrument('wait') do
+          sleep 1
+        end
+        
+        @event.duration # => 1000.138
 
-*   Update `String#camelize` to provide feedback when wrong option is passed
+    After this change, if the block passed to `subscribe` only takes one
+    parameter, the framework will yield an event object to the block.  Now
+    end users are no longer required to make their own:
 
-    `String#camelize` was returning nil without any feedback when an
-    invalid option was passed as a parameter.
+        ActiveSupport::Notifications.subscribe('wait') do |event|
+          @event = event
+        end
+        
+        ActiveSupport::Notifications.instrument('wait') do
+          sleep 1
+        end
+        
+        p @event.allocations # => 7
+        p @event.cpu_time    # => 0.256
+        p @event.idle_time   # => 1003.2399
 
-    Previously:
+    Now you can enjoy event objects without making them yourself.  Neat!
 
-        'one_two'.camelize(true)
-        => nil
+    *Aaron "t.lo" Patterson*
 
-    Now:
+*   Add cpu_time, idle_time, and allocations to Event
 
-        'one_two'.camelize(true)
-        => ArgumentError: Invalid option, use either :upper or :lower.
+    *Eileen M. Uchitelle*, *Aaron Patterson*
 
-    *Ricardo Díaz*
+*   RedisCacheStore: support key expiry in increment/decrement.
 
-*   Fix modulo operations involving durations
+    Pass `:expires_in` to `#increment` and `#decrement` to set a Redis EXPIRE on the key.
 
-    Rails 5.1 introduced `ActiveSupport::Duration::Scalar` as a wrapper
-    around numeric values as a way of ensuring a duration was the outcome of
-    an expression. However, the implementation was missing support for modulo
-    operations. This support has now been added and should result in a duration
-    being returned from expressions involving modulo operations.
+    If the key is already set to expire, RedisCacheStore won't extend its expiry.
 
-    Prior to Rails 5.1:
+        Rails.cache.increment("some_key", 1, expires_in: 2.minutes)
 
-        5.minutes % 2.minutes
-        => 60
+    *Jason Lee*
 
-    Now:
+*   Allow Range#=== and Range#cover? on Range
 
-        5.minutes % 2.minutes
-        => 1 minute
+    `Range#cover?` can now accept a range argument like `Range#include?` and
+    `Range#===`. `Range#===` works correctly on Ruby 2.6. `Range#include?` is moved
+    into a new file, with these two methods.
 
-    Fixes #29603 and #29743.
+    *Requiring active_support/core_ext/range/include_range is now deprecated.*
+    *Use `require "active_support/core_ext/range/compare_range"` instead.*
 
-    *Sayan Chakraborty*, *Andrew White*
+    *utilum*
 
-*   Fix division where a duration is the denominator
+*   Add `index_with` to Enumerable.
 
-    PR #29163 introduced a change in behavior when a duration was the denominator
-    in a calculation - this was incorrect as dividing by a duration should always
-    return a `Numeric`. The behavior of previous versions of Rails has been restored.
+    Allows creating a hash from an enumerable with the value from a passed block
+    or a default argument.
 
-    Fixes #29592.
+        %i( title body ).index_with { |attr| post.public_send(attr) }
+        # => { title: "hey", body: "what's up?" }
 
-    *Andrew White*
+        %i( title body ).index_with(nil)
+        # => { title: nil, body: nil }
 
-*   Add purpose and expiry support to `ActiveSupport::MessageVerifier` &
-   `ActiveSupport::MessageEncryptor`.
+    Closely linked with `index_by`, which creates a hash where the keys are extracted from a block.
 
-    For instance, to ensure a message is only usable for one intended purpose:
+    *Kasper Timm Hansen*
 
-        token = @verifier.generate("x", purpose: :shipping)
+*   Fix bug where `ActiveSupport::Timezone.all` would fail when tzinfo data for
+    any timezone defined in `ActiveSupport::TimeZone::MAPPING` is missing.
 
-        @verifier.verified(token, purpose: :shipping) # => "x"
-        @verifier.verified(token)                     # => nil
+    *Dominik Sander*
 
-    Or make it expire after a set time:
+*   Redis cache store: `delete_matched` no longer blocks the Redis server.
+    (Switches from evaled Lua to a batched SCAN + DEL loop.)
 
-        @verifier.generate("x", expires_in: 1.month)
-        @verifier.generate("y", expires_at: Time.now.end_of_year)
+    *Gleb Mazovetskiy*
 
-    Showcased with `ActiveSupport::MessageVerifier`, but works the same for
-    `ActiveSupport::MessageEncryptor`'s `encrypt_and_sign` and `decrypt_and_verify`.
+*   Fix bug where `ActiveSupport::Cache` will massively inflate the storage
+    size when compression is enabled (which is true by default). This patch
+    does not attempt to repair existing data: please manually flush the cache
+    to clear out the problematic entries.
 
-    Pull requests: #29599, #29854
+    *Godfrey Chan*
 
-    *Assain Jaleel*
+*   Fix bug where `URI.unscape` would fail with mixed Unicode/escaped character input:
 
-*   Make the order of `Hash#reverse_merge!` consistent with `HashWithIndifferentAccess`.
+        URI.unescape("\xe3\x83\x90")  # => "バ"
+        URI.unescape("%E3%83%90")  # => "バ"
+        URI.unescape("\xe3\x83\x90%E3%83%90")  # => Encoding::CompatibilityError
 
-    *Erol Fornoles*
+    *Ashe Connor*, *Aaron Patterson*
 
-*   Add `freeze_time` helper which freezes time to `Time.now` in tests.
+*   Add `before?` and `after?` methods to `Date`, `DateTime`,
+    `Time`, and `TimeWithZone`.
 
-    *Prathamesh Sonpatki*
+    *Nick Holden*
 
-*   Default `ActiveSupport::MessageEncryptor` to use AES 256 GCM encryption.
+*   `ActiveSupport::Inflector#ordinal` and `ActiveSupport::Inflector#ordinalize` now support
+    translations through I18n.
 
-    On for new Rails 5.2 apps. Upgrading apps can find the config as a new
-    framework default.
+        # locale/fr.rb
 
-    *Assain Jaleel*
+        {
+          fr: {
+            number: {
+              nth: {
+                ordinals: lambda do |_key, number:, **_options|
+                  if number.to_i.abs == 1
+                    'er'
+                  else
+                    'e'
+                  end
+                end,
 
-*   Cache: `write_multi`
+                ordinalized: lambda do |_key, number:, **_options|
+                  "#{number}#{ActiveSupport::Inflector.ordinal(number)}"
+                end
+              }
+            }
+          }
+        }
 
-        Rails.cache.write_multi foo: 'bar', baz: 'qux'
 
-    Plus faster fetch_multi with stores that implement `write_multi_entries`.
-    Keys that aren't found may be written to the cache store in one shot
-    instead of separate writes.
+    *Christian Blais*
 
-    The default implementation simply calls `write_entry` for each entry.
-    Stores may override if they're capable of one-shot bulk writes, like
-    Redis `MSET`.
+*   Add `:private` option to ActiveSupport's `Module#delegate`
+    in order to delegate methods as private:
+
+        class User < ActiveRecord::Base
+          has_one :profile
+          delegate :date_of_birth, to: :profile, private: true
+
+          def age
+            Date.today.year - date_of_birth.year
+          end
+        end
+
+        # User.new.age  # => 29
+        # User.new.date_of_birth
+        # => NoMethodError: private method `date_of_birth' called for #<User:0x00000008221340>
+
+    *Tomas Valent*
+
+*   `String#truncate_bytes` to truncate a string to a maximum bytesize without
+    breaking multibyte characters or grapheme clusters like 👩‍👩‍👦‍👦.
 
     *Jeremy Daer*
 
-*   Add default option to module and class attribute accessors.
+*   `String#strip_heredoc` preserves frozenness.
 
-        mattr_accessor :settings, default: {}
+        "foo".freeze.strip_heredoc.frozen?  # => true
 
-    Works for `mattr_reader`, `mattr_writer`, `cattr_accessor`, `cattr_reader`,
-    and `cattr_writer` as well.
+    Fixes that frozen string literals would inadvertently become unfrozen:
 
-    *Genadi Samokovarov*
+        # frozen_string_literal: true
 
-*   Add `Date#prev_occurring` and `Date#next_occurring` to return specified next/previous occurring day of week.
+        foo = <<-MSG.strip_heredoc
+          la la la
+        MSG
 
-    *Shota Iguchi*
+        foo.frozen?  # => false !??
 
-*   Add default option to `class_attribute`.
+    *Jeremy Daer*
 
-    Before:
+*   Rails 6 requires Ruby 2.4.1 or newer.
 
-        class_attribute :settings
-        self.settings = {}
+    *Jeremy Daer*
 
-    Now:
+*   Adds parallel testing to Rails.
 
-        class_attribute :settings, default: {}
+    Parallelize your test suite with forked processes or threads.
 
-    *DHH*
-
-*   `#singularize` and `#pluralize` now respect uncountables for the specified locale.
-
-    *Eilis Hamilton*
-
-*   Add `ActiveSupport::CurrentAttributes` to provide a thread-isolated attributes singleton.
-    Primary use case is keeping all the per-request attributes easily available to the whole system.
-
-    *DHH*
-
-*   Fix implicit coercion calculations with scalars and durations
-
-    Previously, calculations where the scalar is first would be converted to a duration
-    of seconds, but this causes issues with dates being converted to times, e.g:
-
-        Time.zone = "Beijing"           # => Asia/Shanghai
-        date = Date.civil(2017, 5, 20)  # => Mon, 20 May 2017
-        2 * 1.day                       # => 172800 seconds
-        date + 2 * 1.day                # => Mon, 22 May 2017 00:00:00 CST +08:00
-
-    Now, the `ActiveSupport::Duration::Scalar` calculation methods will try to maintain
-    the part structure of the duration where possible, e.g:
-
-        Time.zone = "Beijing"           # => Asia/Shanghai
-        date = Date.civil(2017, 5, 20)  # => Mon, 20 May 2017
-        2 * 1.day                       # => 2 days
-        date + 2 * 1.day                # => Mon, 22 May 2017
-
-    Fixes #29160, #28970.
-
-    *Andrew White*
-
-*   Add support for versioned cache entries. This enables the cache stores to recycle cache keys, greatly saving
-    on storage in cases with frequent churn. Works together with the separation of `#cache_key` and `#cache_version`
-    in Active Record and its use in Action Pack's fragment caching.
-
-    *DHH*
-
-*   Pass gem name and deprecation horizon to deprecation notifications.
-
-    *Willem van Bergen*
-
-*   Add support for `:offset` and `:zone` to `ActiveSupport::TimeWithZone#change`
-
-    *Andrew White*
-
-*   Add support for `:offset` to `Time#change`
-
-    Fixes #28723.
-
-    *Andrew White*
-
-*   Add `fetch_values` for `HashWithIndifferentAccess`
-
-    The method was originally added to `Hash` in Ruby 2.3.0.
-
-    *Josh Pencheon*
+    *Eileen M. Uchitelle*, *Aaron Patterson*
 
 
-Please check [5-1-stable](https://github.com/rails/rails/blob/5-1-stable/activesupport/CHANGELOG.md) for previous changes.
+Please check [5-2-stable](https://github.com/rails/rails/blob/5-2-stable/activesupport/CHANGELOG.md) for previous changes.

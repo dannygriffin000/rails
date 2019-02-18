@@ -23,7 +23,7 @@ module ActiveRecord
         relation = build_relation(finder_class, attribute, value)
         if record.persisted?
           if finder_class.primary_key
-            relation = relation.where.not(finder_class.primary_key => record.id_in_database || record.id)
+            relation = relation.where.not(finder_class.primary_key => record.id_in_database)
           else
             raise UnknownPrimaryKey.new(finder_class, "Can not validate uniqueness for persisted record without primary key.")
           end
@@ -205,9 +205,7 @@ module ActiveRecord
       #                                      | # Boom! We now have a duplicate
       #                                      | # title!
       #
-      # This could even happen if you use transactions with the 'serializable'
-      # isolation level. The best way to work around this problem is to add a unique
-      # index to the database table using
+      # The best way to work around this problem is to add a unique index to the database table using
       # {connection.add_index}[rdoc-ref:ConnectionAdapters::SchemaStatements#add_index].
       # In the rare case that a race condition occurs, the database will guarantee
       # the field's uniqueness.

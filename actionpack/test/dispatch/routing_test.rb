@@ -3,6 +3,7 @@
 require "erb"
 require "abstract_unit"
 require "controller/fake_controllers"
+require "active_support/messages/rotation_configuration"
 
 class TestRoutingMapper < ActionDispatch::IntegrationTest
   SprocketsApp = lambda { |env|
@@ -3152,7 +3153,7 @@ class TestRoutingMapper < ActionDispatch::IntegrationTest
       after = has_named_route?(:hello)
     end
 
-    assert !before, "expected to not have named route :hello before route definition"
+    assert_not before, "expected to not have named route :hello before route definition"
     assert after, "expected to have named route :hello after route definition"
   end
 
@@ -3165,7 +3166,7 @@ class TestRoutingMapper < ActionDispatch::IntegrationTest
       end
     end
 
-    assert !respond_to?(:routes_no_collision_path)
+    assert_not respond_to?(:routes_no_collision_path)
   end
 
   def test_controller_name_with_leading_slash_raise_error
@@ -3312,7 +3313,7 @@ class TestRoutingMapper < ActionDispatch::IntegrationTest
     end
 
     get "/search"
-    assert !@request.params[:action].frozen?
+    assert_not_predicate @request.params[:action], :frozen?
   end
 
   def test_multiple_positional_args_with_the_same_name
@@ -4224,7 +4225,7 @@ class TestGlobRoutingMapper < ActionDispatch::IntegrationTest
     end
   end
 
-  #include Routes.url_helpers
+  # include Routes.url_helpers
   APP = build_app Routes
   def app; APP end
 
@@ -4266,7 +4267,7 @@ class TestOptimizedNamedRoutes < ActionDispatch::IntegrationTest
   def app; APP end
 
   test "enabled when not mounted and default_url_options is empty" do
-    assert Routes.url_helpers.optimize_routes_generation?
+    assert_predicate Routes.url_helpers, :optimize_routes_generation?
   end
 
   test "named route called as singleton method" do
@@ -4499,7 +4500,7 @@ class TestPortConstraints < ActionDispatch::IntegrationTest
 
       get "/integer", to: ok, constraints: { port: 8080  }
       get "/string",  to: ok, constraints: { port: "8080" }
-      get "/array",   to: ok, constraints: { port: [8080] }
+      get "/array/:idx",   to: ok, constraints: { port: [8080], idx: %w[first last] }
       get "/regexp",  to: ok, constraints: { port: /8080/ }
     end
   end
@@ -4528,7 +4529,10 @@ class TestPortConstraints < ActionDispatch::IntegrationTest
     get "http://www.example.com/array"
     assert_response :not_found
 
-    get "http://www.example.com:8080/array"
+    get "http://www.example.com:8080/array/middle"
+    assert_response :not_found
+
+    get "http://www.example.com:8080/array/first"
     assert_response :success
   end
 
@@ -4947,6 +4951,7 @@ end
 class FlashRedirectTest < ActionDispatch::IntegrationTest
   SessionKey = "_myapp_session"
   Generator  = ActiveSupport::LegacyKeyGenerator.new("b3c631c314c0bbca50c1b2843150fe33")
+  Rotations  = ActiveSupport::Messages::RotationConfiguration.new
 
   class KeyGeneratorMiddleware
     def initialize(app)
@@ -4955,6 +4960,8 @@ class FlashRedirectTest < ActionDispatch::IntegrationTest
 
     def call(env)
       env["action_dispatch.key_generator"] ||= Generator
+      env["action_dispatch.cookies_rotations"] ||= Rotations
+
       @app.call(env)
     end
   end
@@ -5052,4 +5059,41 @@ class TestRecognizePath < ActionDispatch::IntegrationTest
     def recognize_path(*args)
       Routes.recognize_path(*args)
     end
+end
+
+class TestRelativeUrlRootGeneration < ActionDispatch::IntegrationTest
+  config = ActionDispatch::Routing::RouteSet::Config.new("/blog", false)
+
+  stub_controllers(config) do |routes|
+    Routes = routes
+
+    routes.draw do
+      get "/", to: "posts#index", as: :posts
+      get "/:id", to: "posts#show", as: :post
+    end
+  end
+
+  include Routes.url_helpers
+
+  APP = build_app Routes
+
+  def app
+    APP
+  end
+
+  def test_url_helpers
+    assert_equal "/blog/", posts_path({})
+    assert_equal "/blog/", Routes.url_helpers.posts_path({})
+
+    assert_equal "/blog/1", post_path(id: "1")
+    assert_equal "/blog/1", Routes.url_helpers.post_path(id: "1")
+  end
+
+  def test_optimized_url_helpers
+    assert_equal "/blog/", posts_path
+    assert_equal "/blog/", Routes.url_helpers.posts_path
+
+    assert_equal "/blog/1", post_path("1")
+    assert_equal "/blog/1", Routes.url_helpers.post_path("1")
+  end
 end

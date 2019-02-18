@@ -23,7 +23,7 @@ class UriReservedCharactersRoutingTest < ActiveSupport::TestCase
     end
 
     safe, unsafe = %w(: @ & = + $ , ;), %w(^ ? # [ ])
-    hex = unsafe.map { |char| "%" + char.unpack("H2").first.upcase }
+    hex = unsafe.map { |char| "%" + char.unpack1("H2").upcase }
 
     @segment = "#{safe.join}#{unsafe.join}".freeze
     @escaped = "#{safe.join}#{hex.join}".freeze
@@ -213,7 +213,7 @@ class LegacyRouteSetTests < ActiveSupport::TestCase
     assert_equal expected, ActiveSupport::JSON.decode(get(u))
   end
 
-  def test_regexp_precidence
+  def test_regexp_precedence
     rs.draw do
       get "/whois/:domain", constraints: {
         domain: /\w+\.[\w\.]+/ },
@@ -676,7 +676,7 @@ class LegacyRouteSetTests < ActiveSupport::TestCase
 
     token = "\321\202\320\265\320\272\321\201\321\202".dup # 'text' in Russian
     token.force_encoding(Encoding::BINARY)
-    escaped_token = CGI::escape(token)
+    escaped_token = CGI.escape(token)
 
     assert_equal "/page/" + escaped_token, url_for(rs, controller: "content", action: "show_page", id: token)
     assert_equal({ controller: "content", action: "show_page", id: token }, rs.recognize_path("/page/#{escaped_token}"))
@@ -937,7 +937,6 @@ class RouteSetTest < ActiveSupport::TestCase
     @default_route_set ||= begin
       set = ActionDispatch::Routing::RouteSet.new
       set.draw do
-
         ActiveSupport::Deprecation.silence do
           get "/:controller(/:action(/:id))"
         end
@@ -1288,14 +1287,14 @@ class RouteSetTest < ActiveSupport::TestCase
   end
 
   def test_routing_traversal_does_not_load_extra_classes
-    assert !Object.const_defined?("Profiler__"), "Profiler should not be loaded"
+    assert_not Object.const_defined?("Profiler__"), "Profiler should not be loaded"
     set.draw do
       get "/profile" => "profile#index"
     end
 
     request_path_params("/profile") rescue nil
 
-    assert !Object.const_defined?("Profiler__"), "Profiler should not be loaded"
+    assert_not Object.const_defined?("Profiler__"), "Profiler should not be loaded"
   end
 
   def test_recognize_with_conditions_and_format
@@ -1342,11 +1341,9 @@ class RouteSetTest < ActiveSupport::TestCase
 
   def test_namespace
     set.draw do
-
       namespace "api" do
         get "inventory" => "products#inventory"
       end
-
     end
 
     params = request_path_params("/api/inventory", method: :get)
@@ -1687,7 +1684,7 @@ class RouteSetTest < ActiveSupport::TestCase
   def test_routes_with_symbols
     set.draw do
       get "unnamed", controller: :pages, action: :show, name: :as_symbol
-      get "named"  , controller: :pages, action: :show, name: :as_symbol, as: :named
+      get "named", controller: :pages, action: :show, name: :as_symbol, as: :named
     end
     assert_equal({ controller: "pages", action: "show", name: :as_symbol }, set.recognize_path("/unnamed"))
     assert_equal({ controller: "pages", action: "show", name: :as_symbol }, set.recognize_path("/named"))
@@ -1893,7 +1890,7 @@ class RouteSetTest < ActiveSupport::TestCase
     assert_equal({ controller: "blog",  action: "show_date", year: "2006", month: "07", day: "28" }, controller.request.path_parameters)
     assert_equal("/blog/2006/07/25", controller.url_for(day: 25, only_path: true))
     assert_equal("/blog/2005",       controller.url_for(year: 2005, only_path: true))
-    assert_equal("/blog/show/123",   controller.url_for(action: "show" , id: 123, only_path: true))
+    assert_equal("/blog/show/123",   controller.url_for(action: "show", id: 123, only_path: true))
     assert_equal("/blog/2006",       controller.url_for(year: 2006, only_path: true))
     assert_equal("/blog/2006",       controller.url_for(year: 2006, month: nil, only_path: true))
   end

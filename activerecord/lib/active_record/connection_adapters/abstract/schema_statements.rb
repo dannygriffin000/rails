@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require_relative "../../migration/join_table"
+require "active_record/migration/join_table"
 require "active_support/core_ext/string/access"
-require "digest"
+require "digest/sha2"
 
 module ActiveRecord
   module ConnectionAdapters # :nodoc:
@@ -79,7 +79,7 @@ module ActiveRecord
       end
 
       # Returns an array of indexes for the given table.
-      def indexes(table_name, name = nil)
+      def indexes(table_name)
         raise NotImplementedError, "#indexes is not implemented"
       end
 
@@ -216,7 +216,7 @@ module ActiveRecord
       # generates:
       #
       #   CREATE TABLE suppliers (
-      #     id int auto_increment PRIMARY KEY
+      #     id bigint auto_increment PRIMARY KEY
       #   ) ENGINE=InnoDB DEFAULT CHARSET=utf8
       #
       # ====== Rename the primary key column
@@ -228,7 +228,7 @@ module ActiveRecord
       # generates:
       #
       #   CREATE TABLE objects (
-      #     guid int auto_increment PRIMARY KEY,
+      #     guid bigint auto_increment PRIMARY KEY,
       #     name varchar(80)
       #   )
       #
@@ -255,8 +255,8 @@ module ActiveRecord
       # generates:
       #
       #   CREATE TABLE order (
-      #       product_id integer NOT NULL,
-      #       client_id integer NOT NULL
+      #       product_id bigint NOT NULL,
+      #       client_id bigint NOT NULL
       #   );
       #
       #   ALTER TABLE ONLY "orders"
@@ -265,15 +265,15 @@ module ActiveRecord
       # ====== Do not add a primary key column
       #
       #   create_table(:categories_suppliers, id: false) do |t|
-      #     t.column :category_id, :integer
-      #     t.column :supplier_id, :integer
+      #     t.column :category_id, :bigint
+      #     t.column :supplier_id, :bigint
       #   end
       #
       # generates:
       #
       #   CREATE TABLE categories_suppliers (
-      #     category_id int,
-      #     supplier_id int
+      #     category_id bigint,
+      #     supplier_id bigint
       #   )
       #
       # ====== Create a temporary table based on a query
@@ -305,7 +305,7 @@ module ActiveRecord
         yield td if block_given?
 
         if options[:force]
-          drop_table(table_name, **options, if_exists: true)
+          drop_table(table_name, options.merge(if_exists: true))
         end
 
         result = execute schema_creation.accept td
@@ -361,8 +361,8 @@ module ActiveRecord
       # generates:
       #
       #   CREATE TABLE assemblies_parts (
-      #     assembly_id int NOT NULL,
-      #     part_id int NOT NULL,
+      #     assembly_id bigint NOT NULL,
+      #     part_id bigint NOT NULL,
       #   ) ENGINE=InnoDB DEFAULT CHARSET=utf8
       #
       def create_join_table(table_1, table_2, column_options: {}, **options)
@@ -406,6 +406,8 @@ module ActiveRecord
       #
       #   Defaults to false.
       #
+      #   Only supported on the MySQL and PostgreSQL adapter, ignored elsewhere.
+      #
       # ====== Add a column
       #
       #   change_table(:suppliers) do |t|
@@ -430,7 +432,7 @@ module ActiveRecord
       #     t.references :company
       #   end
       #
-      # Creates a <tt>company_id(integer)</tt> column.
+      # Creates a <tt>company_id(bigint)</tt> column.
       #
       # ====== Add a polymorphic foreign key column
       #
@@ -438,7 +440,7 @@ module ActiveRecord
       #    t.belongs_to :company, polymorphic: true
       #  end
       #
-      # Creates <tt>company_type(varchar)</tt> and <tt>company_id(integer)</tt> columns.
+      # Creates <tt>company_type(varchar)</tt> and <tt>company_id(bigint)</tt> columns.
       #
       # ====== Remove a column
       #
@@ -520,6 +522,8 @@ module ActiveRecord
       #   Specifies the precision for the <tt>:decimal</tt> and <tt>:numeric</tt> columns.
       # * <tt>:scale</tt> -
       #   Specifies the scale for the <tt>:decimal</tt> and <tt>:numeric</tt> columns.
+      # * <tt>:comment</tt> -
+      #   Specifies the comment for the column. This option is ignored by some backends.
       #
       # Note: The precision is the total number of significant digits,
       # and the scale is the number of digits that can be stored following
@@ -596,7 +600,7 @@ module ActiveRecord
       # to provide these in a migration's +change+ method so it can be reverted.
       # In that case, +type+ and +options+ will be used by #add_column.
       def remove_column(table_name, column_name, type = nil, options = {})
-        execute "ALTER TABLE #{quote_table_name(table_name)} DROP #{quote_column_name(column_name)}"
+        execute "ALTER TABLE #{quote_table_name(table_name)} #{remove_column_for_alter(table_name, column_name, type, options)}"
       end
 
       # Changes the column's definition according to the new options.
@@ -711,7 +715,7 @@ module ActiveRecord
       #
       #   CREATE INDEX by_branch_desc_party ON accounts(branch_id DESC, party_id ASC, surname)
       #
-      # Note: MySQL doesn't yet support index order (it accepts the syntax but ignores it).
+      # Note: MySQL only supports index order from 8.0.1 onwards (earlier versions accepted the syntax but ignored it).
       #
       # ====== Creating a partial index
       #
@@ -733,6 +737,19 @@ module ActiveRecord
       #   CREATE INDEX index_developers_on_name USING btree ON developers (name) -- MySQL
       #
       # Note: only supported by PostgreSQL and MySQL
+      #
+      # ====== Creating an index with a specific operator class
+      #
+      #   add_index(:developers, :name, using: 'gist', opclass: :gist_trgm_ops)
+      #   # CREATE INDEX developers_on_name ON developers USING gist (name gist_trgm_ops) -- PostgreSQL
+      #
+      #   add_index(:developers, [:name, :city], using: 'gist', opclass: { city: :gist_trgm_ops })
+      #   # CREATE INDEX developers_on_name_and_city ON developers USING gist (name, city gist_trgm_ops) -- PostgreSQL
+      #
+      #   add_index(:developers, [:name, :city], using: 'gist', opclass: :gist_trgm_ops)
+      #   # CREATE INDEX developers_on_name_and_city ON developers USING gist (name gist_trgm_ops, city gist_trgm_ops) -- PostgreSQL
+      #
+      # Note: only supported by PostgreSQL
       #
       # ====== Creating an index with a specific type
       #
@@ -802,24 +819,19 @@ module ActiveRecord
       end
 
       # Verifies the existence of an index with a given name.
-      def index_name_exists?(table_name, index_name, default = nil)
-        unless default.nil?
-          ActiveSupport::Deprecation.warn(<<-MSG.squish)
-            Passing default to #index_name_exists? is deprecated without replacement.
-          MSG
-        end
+      def index_name_exists?(table_name, index_name)
         index_name = index_name.to_s
         indexes(table_name).detect { |i| i.name == index_name }
       end
 
-      # Adds a reference. The reference column is an integer by default,
+      # Adds a reference. The reference column is a bigint by default,
       # the <tt>:type</tt> option can be used to specify a different type.
       # Optionally adds a +_type+ column, if <tt>:polymorphic</tt> option is provided.
       # #add_reference and #add_belongs_to are acceptable.
       #
       # The +options+ hash can include the following keys:
       # [<tt>:type</tt>]
-      #   The reference column type. Defaults to +:integer+.
+      #   The reference column type. Defaults to +:bigint+.
       # [<tt>:index</tt>]
       #   Add an appropriate index. Defaults to true.
       #   See #add_index for usage of this option.
@@ -830,7 +842,7 @@ module ActiveRecord
       # [<tt>:null</tt>]
       #   Whether the column allows nulls. Defaults to true.
       #
-      # ====== Create a user_id integer column
+      # ====== Create a user_id bigint column
       #
       #   add_reference(:products, :user)
       #
@@ -887,7 +899,7 @@ module ActiveRecord
             foreign_key_options = { to_table: reference_name }
           end
           foreign_key_options[:column] ||= "#{ref_name}_id"
-          remove_foreign_key(table_name, **foreign_key_options)
+          remove_foreign_key(table_name, foreign_key_options)
         end
 
         remove_column(table_name, "#{ref_name}_id")
@@ -943,6 +955,8 @@ module ActiveRecord
       #   Action that happens <tt>ON DELETE</tt>. Valid values are +:nullify+, +:cascade+ and +:restrict+
       # [<tt>:on_update</tt>]
       #   Action that happens <tt>ON UPDATE</tt>. Valid values are +:nullify+, +:cascade+ and +:restrict+
+      # [<tt>:validate</tt>]
+      #   (Postgres only) Specify whether or not the constraint should be validated. Defaults to +true+.
       def add_foreign_key(from_table, to_table, options = {})
         return unless supports_foreign_keys?
 
@@ -1016,16 +1030,6 @@ module ActiveRecord
         insert_versions_sql(versions) if versions.any?
       end
 
-      def initialize_schema_migrations_table # :nodoc:
-        ActiveRecord::SchemaMigration.create_table
-      end
-      deprecate :initialize_schema_migrations_table
-
-      def initialize_internal_metadata_table # :nodoc:
-        ActiveRecord::InternalMetadata.create_table
-      end
-      deprecate :initialize_internal_metadata_table
-
       def internal_string_options_for_primary_key # :nodoc:
         { primary_key: true }
       end
@@ -1036,8 +1040,8 @@ module ActiveRecord
         sm_table = quote_table_name(ActiveRecord::SchemaMigration.table_name)
 
         migrated = ActiveRecord::SchemaMigration.all_versions.map(&:to_i)
-        versions = ActiveRecord::Migrator.migration_files(migrations_paths).map do |file|
-          ActiveRecord::Migrator.parse_migration_filename(file).first.to_i
+        versions = migration_context.migration_files.map do |file|
+          migration_context.parse_migration_filename(file).first.to_i
         end
 
         unless migrated.include?(version)
@@ -1049,13 +1053,7 @@ module ActiveRecord
           if (duplicate = inserting.detect { |v| inserting.count(v) > 1 })
             raise "Duplicate migration #{duplicate}. Please renumber your migrations to resolve the conflict."
           end
-          if supports_multi_insert?
-            execute insert_versions_sql(inserting)
-          else
-            inserting.each do |v|
-              execute insert_versions_sql(v)
-            end
-          end
+          execute insert_versions_sql(inserting)
         end
       end
 
@@ -1131,7 +1129,7 @@ module ActiveRecord
       def add_index_options(table_name, column_name, comment: nil, **options) # :nodoc:
         column_names = index_column_names(column_name)
 
-        options.assert_valid_keys(:unique, :order, :name, :where, :length, :internal, :using, :algorithm, :type)
+        options.assert_valid_keys(:unique, :order, :name, :where, :length, :internal, :using, :algorithm, :type, :opclass)
 
         index_type = options[:type].to_s if options.key?(:type)
         index_type ||= options[:unique] ? "UNIQUE" : ""
@@ -1170,7 +1168,7 @@ module ActiveRecord
       end
 
       # Changes the comment for a column or removes it if +nil+.
-      def change_column_comment(table_name, column_name, comment) #:nodoc:
+      def change_column_comment(table_name, column_name, comment)
         raise NotImplementedError, "#{self.class} does not support changing column comments"
       end
 
@@ -1184,20 +1182,22 @@ module ActiveRecord
         end
 
         def add_index_sort_order(quoted_columns, **options)
-          if order = options[:order]
-            case order
-            when Hash
-              order = order.symbolize_keys
-              quoted_columns.each { |name, column| column << " #{order[name].upcase}" if order[name].present? }
-            when String
-              quoted_columns.each { |name, column| column << " #{order.upcase}" if order.present? }
-            end
+          orders = options_for_index_columns(options[:order])
+          quoted_columns.each do |name, column|
+            column << " #{orders[name].upcase}" if orders[name].present?
           end
-
-          quoted_columns
         end
 
-        # Overridden by the MySQL adapter for supporting index lengths
+        def options_for_index_columns(options)
+          if options.is_a?(Hash)
+            options.symbolize_keys
+          else
+            Hash.new { |hash, column| hash[column] = options }
+          end
+        end
+
+        # Overridden by the MySQL adapter for supporting index lengths and by
+        # the PostgreSQL adapter for supporting operator classes.
         def add_options_for_index_columns(quoted_columns, **options)
           if supports_index_sort_order?
             quoted_columns = add_index_sort_order(quoted_columns, options)
@@ -1349,6 +1349,20 @@ module ActiveRecord
 
         def can_remove_index_by_name?(options)
           options.is_a?(Hash) && options.key?(:name) && options.except(:name, :algorithm).empty?
+        end
+
+        def add_column_for_alter(table_name, column_name, type, options = {})
+          td = create_table_definition(table_name)
+          cd = td.new_column_definition(column_name, type, options)
+          schema_creation.accept(AddColumnDefinition.new(cd))
+        end
+
+        def remove_column_for_alter(table_name, column_name, type = nil, options = {})
+          "DROP COLUMN #{quote_column_name(column_name)}"
+        end
+
+        def remove_columns_for_alter(table_name, *column_names)
+          column_names.map { |column_name| remove_column_for_alter(table_name, column_name) }
         end
 
         def insert_versions_sql(versions)

@@ -4,17 +4,17 @@ require "set"
 require "thread"
 require "concurrent/map"
 require "pathname"
-require_relative "core_ext/module/aliasing"
-require_relative "core_ext/module/attribute_accessors"
-require_relative "core_ext/module/introspection"
-require_relative "core_ext/module/anonymous"
-require_relative "core_ext/object/blank"
-require_relative "core_ext/kernel/reporting"
-require_relative "core_ext/load_error"
-require_relative "core_ext/name_error"
-require_relative "core_ext/string/starts_ends_with"
-require_relative "dependencies/interlock"
-require_relative "inflector"
+require "active_support/core_ext/module/aliasing"
+require "active_support/core_ext/module/attribute_accessors"
+require "active_support/core_ext/module/introspection"
+require "active_support/core_ext/module/anonymous"
+require "active_support/core_ext/object/blank"
+require "active_support/core_ext/kernel/reporting"
+require "active_support/core_ext/load_error"
+require "active_support/core_ext/name_error"
+require "active_support/core_ext/string/starts_ends_with"
+require "active_support/dependencies/interlock"
+require "active_support/inflector"
 
 module ActiveSupport #:nodoc:
   module Dependencies #:nodoc:
@@ -85,7 +85,7 @@ module ActiveSupport #:nodoc:
     # handles the new constants.
     #
     # If child.rb is being autoloaded, its constants will be added to
-    # autoloaded_constants. If it was being `require`d, they will be discarded.
+    # autoloaded_constants. If it was being required, they will be discarded.
     #
     # This is handled by walking back up the watch stack and adding the constants
     # found by child.rb to the list of original constants in parent.rb.
@@ -224,6 +224,8 @@ module ActiveSupport #:nodoc:
         Dependencies.require_or_load(file_name)
       end
 
+      # :doc:
+
       # Interprets a file using <tt>mechanism</tt> and marks its defined
       # constants as autoloaded. <tt>file_name</tt> can be either a string or
       # respond to <tt>to_path</tt>.
@@ -241,6 +243,8 @@ module ActiveSupport #:nodoc:
 
         Dependencies.depend_on(file_name, message)
       end
+
+      # :nodoc:
 
       def load_dependency(file)
         if Dependencies.load? && Dependencies.constant_watch_stack.watching?
@@ -341,7 +345,7 @@ module ActiveSupport #:nodoc:
     end
 
     def require_or_load(file_name, const_path = nil)
-      file_name = $` if file_name =~ /\.rb\z/
+      file_name = file_name.chomp(".rb")
       expanded = File.expand_path(file_name)
       return if loaded.include?(expanded)
 
@@ -391,7 +395,7 @@ module ActiveSupport #:nodoc:
     # constant paths which would cause Dependencies to attempt to load this
     # file.
     def loadable_constants_for_path(path, bases = autoload_paths)
-      path = $` if path =~ /\.rb\z/
+      path = path.chomp(".rb")
       expanded_path = File.expand_path(path)
       paths = []
 
@@ -447,6 +451,7 @@ module ActiveSupport #:nodoc:
       mod = Module.new
       into.const_set const_name, mod
       autoloaded_constants << qualified_name unless autoload_once_paths.include?(base_path)
+      autoloaded_constants.uniq!
       mod
     end
 
@@ -615,7 +620,7 @@ module ActiveSupport #:nodoc:
       return false if desc.is_a?(Module) && desc.anonymous?
       name = to_constant_name desc
       return false unless qualified_const_defined?(name)
-      return autoloaded_constants.include?(name)
+      autoloaded_constants.include?(name)
     end
 
     # Will the provided constant descriptor be unloaded?
@@ -670,7 +675,7 @@ module ActiveSupport #:nodoc:
       when Module
         desc.name ||
           raise(ArgumentError, "Anonymous modules have no name to be referenced by")
-        else raise TypeError, "Not a valid constant descriptor: #{desc.inspect}"
+      else raise TypeError, "Not a valid constant descriptor: #{desc.inspect}"
       end
     end
 

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require_relative "active_model"
-require_relative "model_helpers"
+require "rails/generators/active_model"
+require "rails/generators/model_helpers"
 
 module Rails
   module Generators
@@ -25,13 +25,8 @@ module Rails
         assign_controller_names!(controller_name.pluralize)
       end
 
-      # TODO Change this to private once we've dropped Ruby 2.2 support.
-      # Workaround for Ruby 2.2 "private attribute?" warning.
-      protected
-
-        attr_reader :controller_name, :controller_file_name
-
       private
+        attr_reader :controller_name, :controller_file_name
 
         def controller_class_path
           if options[:model_name]

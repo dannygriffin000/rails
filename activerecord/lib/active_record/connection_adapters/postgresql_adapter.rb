@@ -1,23 +1,23 @@
 # frozen_string_literal: true
 
 # Make sure we're using pg high enough for type casts and Ruby 2.2+ compatibility
-gem "pg", "~> 0.18"
+gem "pg", ">= 0.18", "< 2.0"
 require "pg"
 
-require_relative "abstract_adapter"
-require_relative "statement_pool"
-require_relative "postgresql/column"
-require_relative "postgresql/database_statements"
-require_relative "postgresql/explain_pretty_printer"
-require_relative "postgresql/oid"
-require_relative "postgresql/quoting"
-require_relative "postgresql/referential_integrity"
-require_relative "postgresql/schema_creation"
-require_relative "postgresql/schema_definitions"
-require_relative "postgresql/schema_dumper"
-require_relative "postgresql/schema_statements"
-require_relative "postgresql/type_metadata"
-require_relative "postgresql/utils"
+require "active_record/connection_adapters/abstract_adapter"
+require "active_record/connection_adapters/statement_pool"
+require "active_record/connection_adapters/postgresql/column"
+require "active_record/connection_adapters/postgresql/database_statements"
+require "active_record/connection_adapters/postgresql/explain_pretty_printer"
+require "active_record/connection_adapters/postgresql/oid"
+require "active_record/connection_adapters/postgresql/quoting"
+require "active_record/connection_adapters/postgresql/referential_integrity"
+require "active_record/connection_adapters/postgresql/schema_creation"
+require "active_record/connection_adapters/postgresql/schema_definitions"
+require "active_record/connection_adapters/postgresql/schema_dumper"
+require "active_record/connection_adapters/postgresql/schema_statements"
+require "active_record/connection_adapters/postgresql/type_metadata"
+require "active_record/connection_adapters/postgresql/utils"
 
 module ActiveRecord
   module ConnectionHandling # :nodoc:
@@ -122,6 +122,10 @@ module ActiveRecord
       include PostgreSQL::SchemaStatements
       include PostgreSQL::DatabaseStatements
 
+      def supports_bulk_alter?
+        true
+      end
+
       def supports_index_sort_order?
         true
       end
@@ -139,6 +143,10 @@ module ActiveRecord
       end
 
       def supports_foreign_keys?
+        true
+      end
+
+      def supports_validate_constraints?
         true
       end
 
@@ -166,7 +174,7 @@ module ActiveRecord
         { concurrently: "CONCURRENTLY" }
       end
 
-      class StatementPool < ConnectionAdapters::StatementPool
+      class StatementPool < ConnectionAdapters::StatementPool # :nodoc:
         def initialize(connection, max)
           super(max)
           @connection = connection
@@ -182,7 +190,6 @@ module ActiveRecord
         end
 
         private
-
           def dealloc(key)
             @connection.query "DEALLOCATE #{key}" if connection_active?
           rescue PG::Error
@@ -273,6 +280,11 @@ module ActiveRecord
         end
       end
 
+      def discard! # :nodoc:
+        @connection.socket_io.reopen(IO::NULL) rescue nil
+        @connection = nil
+      end
+
       def native_database_types #:nodoc:
         NATIVE_DATABASE_TYPES
       end
@@ -306,20 +318,24 @@ module ActiveRecord
         postgresql_version >= 90300
       end
 
+      def supports_foreign_tables?
+        postgresql_version >= 90300
+      end
+
       def supports_pgcrypto_uuid?
         postgresql_version >= 90400
       end
 
       def get_advisory_lock(lock_id) # :nodoc:
         unless lock_id.is_a?(Integer) && lock_id.bit_length <= 63
-          raise(ArgumentError, "Postgres requires advisory lock ids to be a signed 64 bit integer")
+          raise(ArgumentError, "PostgreSQL requires advisory lock ids to be a signed 64 bit integer")
         end
         query_value("SELECT pg_try_advisory_lock(#{lock_id})")
       end
 
       def release_advisory_lock(lock_id) # :nodoc:
         unless lock_id.is_a?(Integer) && lock_id.bit_length <= 63
-          raise(ArgumentError, "Postgres requires advisory lock ids to be a signed 64 bit integer")
+          raise(ArgumentError, "PostgreSQL requires advisory lock ids to be a signed 64 bit integer")
         end
         query_value("SELECT pg_advisory_unlock(#{lock_id})")
       end
@@ -337,25 +353,20 @@ module ActiveRecord
       end
 
       def extension_enabled?(name)
-        if supports_extensions?
-          res = exec_query("SELECT EXISTS(SELECT * FROM pg_available_extensions WHERE name = '#{name}' AND installed_version IS NOT NULL) as enabled", "SCHEMA")
-          res.cast_values.first
-        end
+        res = exec_query("SELECT EXISTS(SELECT * FROM pg_available_extensions WHERE name = '#{name}' AND installed_version IS NOT NULL) as enabled", "SCHEMA")
+        res.cast_values.first
       end
 
       def extensions
-        if supports_extensions?
-          exec_query("SELECT extname FROM pg_extension", "SCHEMA").cast_values
-        else
-          super
-        end
+        exec_query("SELECT extname FROM pg_extension", "SCHEMA").cast_values
       end
 
       # Returns the configured supported identifier length supported by PostgreSQL
-      def table_alias_length
+      def max_identifier_length
         @max_identifier_length ||= query_value("SHOW max_identifier_length", "SCHEMA").to_i
       end
-      alias index_name_length table_alias_length
+      alias table_alias_length max_identifier_length
+      alias index_name_length max_identifier_length
 
       # Set the authorized user for this session
       def session_auth=(user)
@@ -387,7 +398,6 @@ module ActiveRecord
       end
 
       private
-
         # See https://www.postgresql.org/docs/current/static/errcodes-appendix.html
         VALUE_LIMIT_VIOLATION = "22001"
         NUMERIC_VALUE_OUT_OF_RANGE = "22003"
@@ -396,6 +406,8 @@ module ActiveRecord
         UNIQUE_VIOLATION      = "23505"
         SERIALIZATION_FAILURE = "40001"
         DEADLOCK_DETECTED     = "40P01"
+        LOCK_NOT_AVAILABLE    = "55P03"
+        QUERY_CANCELED        = "57014"
 
         def translate_exception(exception, message)
           return exception unless exception.respond_to?(:result)
@@ -415,6 +427,10 @@ module ActiveRecord
             SerializationFailure.new(message)
           when DEADLOCK_DETECTED
             Deadlocked.new(message)
+          when LOCK_NOT_AVAILABLE
+            LockWaitTimeout.new(message)
+          when QUERY_CANCELED
+            QueryCanceled.new(message)
           else
             super
           end
@@ -449,7 +465,7 @@ module ActiveRecord
           register_class_with_limit m, "bit", OID::Bit
           register_class_with_limit m, "varbit", OID::BitVarying
           m.alias_type "timestamptz", "timestamp"
-          m.register_type "date", Type::Date.new
+          m.register_type "date", OID::Date.new
 
           m.register_type "money", OID::Money.new
           m.register_type "bytea", OID::Bytea.new
@@ -820,6 +836,7 @@ module ActiveRecord
         ActiveRecord::Type.register(:bit_varying, OID::BitVarying, adapter: :postgresql)
         ActiveRecord::Type.register(:binary, OID::Bytea, adapter: :postgresql)
         ActiveRecord::Type.register(:cidr, OID::Cidr, adapter: :postgresql)
+        ActiveRecord::Type.register(:date, OID::Date, adapter: :postgresql)
         ActiveRecord::Type.register(:datetime, OID::DateTime, adapter: :postgresql)
         ActiveRecord::Type.register(:decimal, OID::Decimal, adapter: :postgresql)
         ActiveRecord::Type.register(:enum, OID::Enum, adapter: :postgresql)

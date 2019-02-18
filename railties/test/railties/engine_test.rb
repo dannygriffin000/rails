@@ -32,6 +32,11 @@ module RailtiesTest
       require "#{app_path}/config/environment"
     end
 
+    def migrations
+      migration_root = File.expand_path(ActiveRecord::Migrator.migrations_paths.first, app_path)
+      ActiveRecord::MigrationContext.new(migration_root).migrations
+    end
+
     test "serving sprocket's assets" do
       @plugin.write "app/assets/javascripts/engine.js.erb", "<%= :alert %>();"
       add_to_env_config "development", "config.assets.digest = false"
@@ -82,31 +87,32 @@ module RailtiesTest
         end
       RUBY
 
-      add_to_config "ActiveRecord::Base.timestamped_migrations = false"
-
       boot_rails
 
       Dir.chdir(app_path) do
+        # Install Active Storage migration file first so as not to affect test.
+        `bundle exec rake active_storage:install`
         output = `bundle exec rake bukkits:install:migrations`
 
-        assert File.exist?("#{app_path}/db/migrate/2_create_users.bukkits.rb")
-        assert File.exist?("#{app_path}/db/migrate/3_add_last_name_to_users.bukkits.rb")
-        assert_match(/Copied migration 2_create_users\.bukkits\.rb from bukkits/, output)
-        assert_match(/Copied migration 3_add_last_name_to_users\.bukkits\.rb from bukkits/, output)
-        assert_match(/NOTE: Migration 3_create_sessions\.rb from bukkits has been skipped/, output)
-        assert_equal 3, Dir["#{app_path}/db/migrate/*.rb"].length
+        ["CreateUsers", "AddLastNameToUsers", "CreateSessions"].each do |migration_name|
+          assert migrations.detect { |migration| migration.name == migration_name }
+        end
+        assert_match(/Copied migration \d+_create_users\.bukkits\.rb from bukkits/, output)
+        assert_match(/Copied migration \d+_add_last_name_to_users\.bukkits\.rb from bukkits/, output)
+        assert_match(/NOTE: Migration \d+_create_sessions\.rb from bukkits has been skipped/, output)
+
+        migrations_count = Dir["#{app_path}/db/migrate/*.rb"].length
+
+        assert_equal migrations.length, migrations_count
 
         output = `bundle exec rake railties:install:migrations`.split("\n")
 
-        assert_no_match(/2_create_users/, output.join("\n"))
-
-        bukkits_migration_order = output.index(output.detect { |o| /NOTE: Migration 3_create_sessions\.rb from bukkits has been skipped/ =~ o })
-        assert_not_nil bukkits_migration_order, "Expected migration to be skipped"
-
-        migrations_count = Dir["#{app_path}/db/migrate/*.rb"].length
-        `bundle exec rake railties:install:migrations`
-
         assert_equal migrations_count, Dir["#{app_path}/db/migrate/*.rb"].length
+
+        assert_no_match(/\d+_create_users/, output.join("\n"))
+
+        bukkits_migration_order = output.index(output.detect { |o| /NOTE: Migration \d+_create_sessions\.rb from bukkits has been skipped/ =~ o })
+        assert_not_nil bukkits_migration_order, "Expected migration to be skipped"
       end
     end
 
@@ -171,10 +177,12 @@ module RailtiesTest
       boot_rails
 
       Dir.chdir(app_path) do
+        # Install Active Storage migration file first so as not to affect test.
+        `bundle exec rake active_storage:install`
         output = `bundle exec rake railties:install:migrations`.split("\n")
 
-        assert_match(/Copied migration \d+_create_users\.core_engine\.rb from core_engine/, output.second)
-        assert_match(/Copied migration \d+_create_keys\.api_engine\.rb from api_engine/, output.last)
+        assert_match(/Copied migration \d+_create_users\.core_engine\.rb from core_engine/, output.first)
+        assert_match(/Copied migration \d+_create_keys\.api_engine\.rb from api_engine/, output.second)
       end
     end
 
@@ -203,9 +211,12 @@ module RailtiesTest
 
       Dir.chdir(@plugin.path) do
         output = `bundle exec rake app:bukkits:install:migrations`
-        assert File.exist?("#{app_path}/db/migrate/0_add_first_name_to_users.bukkits.rb")
-        assert_match(/Copied migration 0_add_first_name_to_users\.bukkits\.rb from bukkits/, output)
-        assert_equal 1, Dir["#{app_path}/db/migrate/*.rb"].length
+
+        migration_with_engine_path = migrations.detect { |migration| migration.name == "AddFirstNameToUsers" }
+        assert migration_with_engine_path
+        assert_match(/\/db\/migrate\/\d+_add_first_name_to_users\.bukkits\.rb/, migration_with_engine_path.filename)
+        assert_match(/Copied migration \d+_add_first_name_to_users\.bukkits\.rb from bukkits/, output)
+        assert_equal migrations.length, Dir["#{app_path}/db/migrate/*.rb"].length
       end
     end
 
@@ -215,7 +226,7 @@ module RailtiesTest
       require "rdoc/task"
       require "rake/testtask"
       Rails.application.load_tasks
-      assert !Rake::Task.task_defined?("bukkits:install:migrations")
+      assert_not Rake::Task.task_defined?("bukkits:install:migrations")
     end
 
     test "puts its lib directory on load path" do
@@ -559,7 +570,6 @@ YAML
 
       get("/arunagw")
       assert_equal "arunagw", last_response.body
-
     end
 
     test "it provides routes as default endpoint" do
@@ -734,7 +744,7 @@ YAML
       assert_equal "bukkits", Bukkits::Engine.engine_name
       assert_equal Bukkits.railtie_namespace, Bukkits::Engine
       assert ::Bukkits::MyMailer.method_defined?(:foo_url)
-      assert !::Bukkits::MyMailer.method_defined?(:bar_url)
+      assert_not ::Bukkits::MyMailer.method_defined?(:bar_url)
 
       get("/bukkits/from_app")
       assert_equal "false", last_response.body
@@ -969,14 +979,14 @@ YAML
       boot_rails
 
       app_generators = Rails.application.config.generators.options[:rails]
-      assert_equal :mongoid  , app_generators[:orm]
-      assert_equal :liquid   , app_generators[:template_engine]
+      assert_equal :mongoid, app_generators[:orm]
+      assert_equal :liquid, app_generators[:template_engine]
       assert_equal :test_unit, app_generators[:test_framework]
 
       generators = Bukkits::Engine.config.generators.options[:rails]
       assert_equal :data_mapper, generators[:orm]
-      assert_equal :haml      , generators[:template_engine]
-      assert_equal :rspec     , generators[:test_framework]
+      assert_equal :haml, generators[:template_engine]
+      assert_equal :rspec, generators[:test_framework]
     end
 
     test "engine should get default generators with ability to overwrite them" do
@@ -992,10 +1002,10 @@ YAML
 
       generators = Bukkits::Engine.config.generators.options[:rails]
       assert_equal :active_record, generators[:orm]
-      assert_equal :rspec        , generators[:test_framework]
+      assert_equal :rspec, generators[:test_framework]
 
       app_generators = Rails.application.config.generators.options[:rails]
-      assert_equal :test_unit    , app_generators[:test_framework]
+      assert_equal :test_unit, app_generators[:test_framework]
     end
 
     test "do not create table_name_prefix method if it already exists" do
@@ -1466,6 +1476,21 @@ YAML
 
       get("/fruits/1/bukkits/posts")
       assert_equal "/fruits/2/bukkits/posts", last_response.body
+    end
+
+    test "active_storage:install task works within engine" do
+      @plugin.write "Rakefile", <<-RUBY
+        APP_RAKEFILE = '#{app_path}/Rakefile'
+        load 'rails/tasks/engine.rake'
+      RUBY
+
+      Dir.chdir(@plugin.path) do
+        output = `bundle exec rake app:active_storage:install`
+        assert $?.success?, output
+
+        active_storage_migration = migrations.detect { |migration| migration.name == "CreateActiveStorageTables" }
+        assert active_storage_migration
+      end
     end
 
   private

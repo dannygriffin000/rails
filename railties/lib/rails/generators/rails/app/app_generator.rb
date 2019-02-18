@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "../../app_base"
+require "rails/generators/app_base"
 
 module Rails
   module ActionMethods # :nodoc:
@@ -21,7 +21,6 @@ module Rails
         RUBY
       end
 
-      # TODO: Remove once this is fully in place
       def method_missing(meth, *args, &block)
         @generator.send(meth, *args, &block)
       end
@@ -69,7 +68,7 @@ module Rails
 
     def version_control
       if !options[:skip_git] && !options[:pretend]
-        run "git init"
+        run "git init", capture: options[:quiet]
       end
     end
 
@@ -95,11 +94,9 @@ module Rails
     end
 
     def bin_when_updating
-      bin_yarn_exist = File.exist?("bin/yarn")
-
       bin
 
-      if options[:api] && !bin_yarn_exist
+      if options[:skip_yarn]
         remove_file "bin/yarn"
       end
     end
@@ -111,11 +108,10 @@ module Rails
         template "routes.rb"
         template "application.rb"
         template "environment.rb"
-        template "secrets.yml"
         template "cable.yml" unless options[:skip_action_cable]
         template "puma.rb"   unless options[:skip_puma]
         template "spring.rb" if spring_install?
-        template "storage.yml"
+        template "storage.yml" unless skip_active_storage?
 
         directory "environments"
         directory "initializers"
@@ -129,6 +125,9 @@ module Rails
       active_storage_config_exist    = File.exist?("config/storage.yml")
       rack_cors_config_exist         = File.exist?("config/initializers/cors.rb")
       assets_config_exist            = File.exist?("config/initializers/assets.rb")
+      csp_config_exist               = File.exist?("config/initializers/content_security_policy.rb")
+
+      @config_target_version = Rails.application.config.loaded_config_version || "5.0"
 
       config
 
@@ -140,8 +139,12 @@ module Rails
         template "config/cable.yml"
       end
 
-      if !active_storage_config_exist
+      if !skip_active_storage? && !active_storage_config_exist
         template "config/storage.yml"
+      end
+
+      if options[:skip_sprockets] && !assets_config_exist
+        remove_file "config/initializers/assets.rb"
       end
 
       unless rack_cors_config_exist
@@ -153,10 +156,26 @@ module Rails
           remove_file "config/initializers/cookies_serializer.rb"
         end
 
-        unless assets_config_exist
-          remove_file "config/initializers/assets.rb"
+        unless csp_config_exist
+          remove_file "config/initializers/content_security_policy.rb"
         end
       end
+    end
+
+    def master_key
+      return if options[:pretend] || options[:dummy_app]
+
+      require "rails/generators/rails/master_key/master_key_generator"
+      master_key_generator = Rails::Generators::MasterKeyGenerator.new([], quiet: options[:quiet], force: options[:force])
+      master_key_generator.add_master_key_file_silently
+      master_key_generator.ignore_master_key_file_silently
+    end
+
+    def credentials
+      return if options[:pretend] || options[:dummy_app]
+
+      require "rails/generators/rails/credentials/credentials_generator"
+      Rails::Generators::CredentialsGenerator.new([], quiet: options[:quiet]).add_credentials_file_silently
     end
 
     def database_yml
@@ -213,6 +232,10 @@ module Rails
     def vendor
       empty_directory_with_keep_file "vendor"
     end
+
+    def config_target_version
+      defined?(@config_target_version) ? @config_target_version : Rails::VERSION::STRING.to_f
+    end
   end
 
   module Generators
@@ -222,11 +245,11 @@ module Rails
     RESERVED_NAMES = %w[application destroy plugin runner test]
 
     class AppGenerator < AppBase # :nodoc:
-      WEBPACKS = %w( react vue angular elm )
+      WEBPACKS = %w( react vue angular elm stimulus )
 
       add_shared_options_for "application"
 
-      # Add bin/rails options
+      # Add rails command options
       class_option :version, type: :boolean, aliases: "-v", group: :rails,
                              desc: "Show Rails version number and quit"
 
@@ -289,8 +312,16 @@ module Rails
       end
       remove_task :update_config_files
 
+      def create_master_key
+        build(:master_key)
+      end
+
+      def create_credentials
+        build(:credentials)
+      end
+
       def display_upgrade_guide_info
-        say "\nAfter this, check Rails upgrade guide at http://guides.rubyonrails.org/upgrading_ruby_on_rails.html for more details about upgrading your app."
+        say "\nAfter this, check Rails upgrade guide at https://guides.rubyonrails.org/upgrading_ruby_on_rails.html for more details about upgrading your app."
       end
       remove_task :display_upgrade_guide_info
 
@@ -320,6 +351,14 @@ module Rails
         build(:public_directory)
       end
 
+      def create_tmp_files
+        build(:tmp)
+      end
+
+      def create_vendor_files
+        build(:vendor)
+      end
+
       def create_test_files
         build(:test) unless options[:skip_test]
       end
@@ -328,12 +367,8 @@ module Rails
         build(:system_test) if depends_on_system_test?
       end
 
-      def create_tmp_files
-        build(:tmp)
-      end
-
-      def create_vendor_files
-        build(:vendor)
+      def create_storage_files
+        build(:storage) unless skip_active_storage?
       end
 
       def delete_app_assets_if_api_option
@@ -351,9 +386,13 @@ module Rails
         end
       end
 
-      def delete_application_layout_file_if_api_option
+      def delete_app_views_if_api_option
         if options[:api]
-          remove_file "app/views/layouts/application.html.erb"
+          if options[:skip_action_mailer]
+            remove_dir "app/views"
+          else
+            remove_file "app/views/layouts/application.html.erb"
+          end
         end
       end
 
@@ -405,6 +444,7 @@ module Rails
       def delete_non_api_initializers_if_api_option
         if options[:api]
           remove_file "config/initializers/cookies_serializer.rb"
+          remove_file "config/initializers/content_security_policy.rb"
         end
       end
 
@@ -416,7 +456,7 @@ module Rails
 
       def delete_new_framework_defaults
         unless options[:update]
-          remove_file "config/initializers/new_framework_defaults_5_2.rb"
+          remove_file "config/initializers/new_framework_defaults_6_0.rb"
         end
       end
 
@@ -447,7 +487,11 @@ module Rails
       end
 
       def app_name
-        @app_name ||= (defined_app_const_base? ? defined_app_name : File.basename(destination_root)).tr('\\', "").tr(". ", "_")
+        @app_name ||= original_app_name.tr("-", "_")
+      end
+
+      def original_app_name
+        @original_app_name ||= (defined_app_const_base? ? defined_app_name : File.basename(destination_root)).tr('\\', "").tr(". ", "_")
       end
 
       def defined_app_name
@@ -471,19 +515,15 @@ module Rails
       end
 
       def valid_const?
-        if app_const =~ /^\d/
-          raise Error, "Invalid application name #{app_name}. Please give a name which does not start with numbers."
-        elsif RESERVED_NAMES.include?(app_name)
-          raise Error, "Invalid application name #{app_name}. Please give a " \
+        if /^\d/.match?(app_const)
+          raise Error, "Invalid application name #{original_app_name}. Please give a name which does not start with numbers."
+        elsif RESERVED_NAMES.include?(original_app_name)
+          raise Error, "Invalid application name #{original_app_name}. Please give a " \
                        "name which does not match one of the reserved rails " \
                        "words: #{RESERVED_NAMES.join(", ")}"
         elsif Object.const_defined?(app_const_base)
-          raise Error, "Invalid application name #{app_name}, constant #{app_const_base} is already in use. Please choose another application name."
+          raise Error, "Invalid application name #{original_app_name}, constant #{app_const_base} is already in use. Please choose another application name."
         end
-      end
-
-      def app_secret
-        SecureRandom.hex(64)
       end
 
       def mysql_socket
@@ -532,7 +572,7 @@ module Rails
 
         def handle_version_request!(argument)
           if ["--version", "-v"].include?(argument)
-            require_relative "../../../version"
+            require "rails/version"
             puts "Rails #{Rails::VERSION::STRING}"
             exit(0)
           end
