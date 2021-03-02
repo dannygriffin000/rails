@@ -433,7 +433,7 @@ GEM
     selenium-webdriver (3.12.0)
       childprocess (~> 0.5)
       rubyzip (~> 1.2)
-    sequel (5.8.0)
+    sequel (5.42.0)
     serverengine (2.0.6)
       sigdump (~> 0.2.2)
     sidekiq (5.1.3)
