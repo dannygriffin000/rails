@@ -89,7 +89,7 @@ group :storage do
   gem "azure-storage", require: false
 
   gem "image_processing", "~> 1.2"
-  gem "ffi", "<= 1.9.21"
+  gem "ffi", "<= 1.15.1"
 end
 
 group :ujs do
